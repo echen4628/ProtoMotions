@@ -12,6 +12,7 @@ env:
     experiment_name: ${experiment_name}
     num_envs: ${num_envs}
     headless: ${headless}
+    headless_record: ${headless_record}
     
     simulator: ${simulator}
 

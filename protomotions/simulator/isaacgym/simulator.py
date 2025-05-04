@@ -47,6 +47,7 @@ from protomotions.simulator.base_simulator.config import (
     SimBodyOrdering,
     SimulatorConfig
 )
+import cv2
 
 
 class IsaacGymSimulator(Simulator):
@@ -73,9 +74,8 @@ class IsaacGymSimulator(Simulator):
                 device_index = 0
         else:
             device_index = self.device.index
-
         self._graphics_device_id = device_index
-        if self.headless is True:
+        if self.headless and not self.headless_record:
             self._graphics_device_id = -1
 
         self._gym = gymapi.acquire_gym()
@@ -124,6 +124,25 @@ class IsaacGymSimulator(Simulator):
                 cam_target = gymapi.Vec3(10.0, 0.0, 15.0)
 
             self._gym.viewer_camera_look_at(self._viewer, None, cam_pos, cam_target)
+        elif self.headless_record:
+            # This part is same as above, could be combined
+            sim_params = self._gym.get_sim_params(self._sim)
+            if sim_params.up_axis == gymapi.UP_AXIS_Z:
+                cam_pos = gymapi.Vec3(20.0, 25.0, 3.0)
+                cam_target = gymapi.Vec3(10.0, 15.0, 0.0)
+            else:
+                cam_pos = gymapi.Vec3(20.0, 3.0, 25.0)
+                cam_target = gymapi.Vec3(10.0, 0.0, 15.0)
+
+            self.camera_props = gymapi.CameraProperties()
+            self.camera_props.width = 360
+            self.camera_props.height = 240
+            self.rendering_camera = self._gym.create_camera_sensor(self._envs[0], self.camera_props)
+            self._gym.set_camera_location(self.rendering_camera, self._envs[0], cam_pos, cam_target)
+            
+            # initialize to be False so that code knows it needs to start recording
+            self.headless_record_started = False
+
 
         # Refresh tensors BEFORE we acquire them https://forums.developer.nvidia.com/t/isaacgym-preview-4-actor-root-state-returns-nans-with-isaacgymenvs-style-task/223738/4
         self._gym.refresh_dof_state_tensor(self._sim)
@@ -251,7 +270,7 @@ class IsaacGymSimulator(Simulator):
                 self.num_envs, bodies_per_env, 3
             )[..., self._num_bodies :, :]
 
-        if not self.headless:
+        if not self.headless or self.headless_record:
             self._init_camera()
 
         if visualization_markers:
@@ -1007,12 +1026,14 @@ class IsaacGymSimulator(Simulator):
             self._cam_prev_char_pos[1],
             self._cam_prev_char_pos[2] + 0.2,
         )
-        self._gym.viewer_camera_look_at(self._viewer, None, cam_pos, cam_target)
+        if not self.headless:
+            self._gym.viewer_camera_look_at(self._viewer, None, cam_pos, cam_target)
+        elif self.headless_record:
+            self._gym.set_camera_location(self.rendering_camera, self._envs[0], cam_pos, cam_target)
 
     def render(self) -> None:
         if not self.headless:
             self._update_camera()
-
             # check for window closed
             if self._gym.query_viewer_has_closed(self._viewer):
                 sys.exit()
@@ -1042,6 +1063,14 @@ class IsaacGymSimulator(Simulator):
                 self._gym.draw_viewer(self._viewer, self._sim, True)
             else:
                 self._gym.poll_viewer_events(self._viewer)
+        elif self.headless_record:
+            self._gym.step_graphics(self._sim)
+            self._update_camera()
+            self._gym.render_all_camera_sensors(self._sim)
+            if not self.headless_record_started:
+                self._toggle_video_record()
+                self.headless_record_started = True
+
         super().render()
 
     def _update_simulator_markers(self, markers_state: Optional[Dict[str, MarkerState]] = None) -> None:
@@ -1072,11 +1101,15 @@ class IsaacGymSimulator(Simulator):
         )
 
     def _write_viewport_to_file(self, file_name: str) -> None:
-        self._gym.write_viewer_image_to_file(
-            self._viewer,
-            file_name,
-        )
-
+        if not self.headless:
+            self._gym.write_viewer_image_to_file(
+                self._viewer,
+                file_name,
+            )
+        elif self.headless_record:
+            im = self._gym.get_camera_image(self._sim, self._envs[0], self.rendering_camera, gymapi.IMAGE_COLOR)
+            im = im.reshape((self.camera_props.height, self.camera_props.width, 4))
+            cv2.imwrite(file_name, im)
     def close(self) -> None:
         if self._viewer:
             self._gym.destroy_viewer(self._viewer)
@@ -1101,30 +1134,56 @@ class IsaacGymSimulator(Simulator):
                 .numpy()
             )
             height_offset = 0
+        if not self.headless:
+            current_cam_transform = self._gym.get_viewer_camera_transform(self._viewer, None)
+            current_cam_pos = np.array(
+                [
+                    current_cam_transform.p.x,
+                    current_cam_transform.p.y,
+                    current_cam_transform.p.z,
+                ]
+            )
 
-        current_cam_transform = self._gym.get_viewer_camera_transform(self._viewer, None)
-        current_cam_pos = np.array(
-            [
+            cam_offset = current_cam_pos - self._cam_prev_char_pos
+
+            new_cam_target = gymapi.Vec3(
+                current_char_pos[0],
+                current_char_pos[1],
+                current_char_pos[2] + height_offset,
+            )
+
+            new_cam_pos = gymapi.Vec3(
+                current_char_pos[0] + cam_offset[0],
+                current_char_pos[1] + cam_offset[1],
+                current_char_pos[2] + cam_offset[2],
+            )
+
+            self._gym.viewer_camera_look_at(self._viewer, None, new_cam_pos, new_cam_target)
+
+            self._cam_prev_char_pos[:] = current_char_pos
+        elif self.headless_record:
+             # In headless mode, we use the rendering_camera instead of viewer camera
+            current_cam_transform = self._gym.get_camera_transform(self._sim, self._envs[0], self.rendering_camera)
+            current_cam_pos = np.array([
                 current_cam_transform.p.x,
                 current_cam_transform.p.y,
                 current_cam_transform.p.z,
-            ]
-        )
+            ])
 
-        cam_offset = current_cam_pos - self._cam_prev_char_pos
+            cam_offset = current_cam_pos - self._cam_prev_char_pos
 
-        new_cam_target = gymapi.Vec3(
-            current_char_pos[0],
-            current_char_pos[1],
-            current_char_pos[2] + height_offset,
-        )
+            new_cam_target = gymapi.Vec3(
+                current_char_pos[0],
+                current_char_pos[1],
+                current_char_pos[2] + height_offset,
+            )
 
-        new_cam_pos = gymapi.Vec3(
-            current_char_pos[0] + cam_offset[0],
-            current_char_pos[1] + cam_offset[1],
-            current_char_pos[2] + cam_offset[2],
-        )
+            new_cam_pos = gymapi.Vec3(
+                current_char_pos[0] + cam_offset[0],
+                current_char_pos[1] + cam_offset[1],
+                current_char_pos[2] + cam_offset[2],
+            )
 
-        self._gym.viewer_camera_look_at(self._viewer, None, new_cam_pos, new_cam_target)
+            self._gym.set_camera_location(self.rendering_camera, self._envs[0], new_cam_pos, new_cam_target)
 
-        self._cam_prev_char_pos[:] = current_char_pos
+            self._cam_prev_char_pos[:] = current_char_pos

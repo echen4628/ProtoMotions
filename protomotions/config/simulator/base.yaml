@@ -7,6 +7,7 @@ simulator:
   config:
     w_last: ???  # IsaacGym is xyzw quaternions
     headless: ${headless}
+    headless_record: ${headless_record}
     robot: ${robot}
     num_envs: ${num_envs}
     plane:

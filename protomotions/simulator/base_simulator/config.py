@@ -295,6 +295,7 @@ class SimulatorConfig(ConfigBuilder):
     """Main configuration class for the simulator."""
     w_last: bool  # quaternion format (xyzw vs wxyz)
     headless: bool
+    headless_record: bool
     robot: RobotConfig
     num_envs: int
     sim: SimParams

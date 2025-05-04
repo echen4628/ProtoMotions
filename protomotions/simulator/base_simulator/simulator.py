@@ -71,6 +71,7 @@ class Simulator(ABC):
             self._num_objects_per_scene = 0
         self.terrain = terrain
         self.headless: bool = self.config.headless
+        self.headless_record: bool = self.config.headless_record
         self.num_envs: int = self.config.num_envs
 
         self.control_type: ControlType = self.robot_config.control.control_type
@@ -666,77 +667,76 @@ class Simulator(ABC):
         3. Video compilation when recording ends
         4. Cleanup of temporary image files
         """
-        if not self.headless:
-            # Handle recording state transitions
-            if self._user_recording_state_change:
-                if self._user_is_recording:
-                    # Initialize new recording
-                    self._user_recording_video_queue = deque(
-                        maxlen=self._user_recording_video_queue_size
-                    )
-                    curr_date_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-                    self._curr_user_recording_name = (
-                        self._user_recording_video_path % curr_date_time
-                    )
-                    self._user_recording_frame = 0
-                    
-                    self._recorded_motion = {"global_translation": [], "global_rotation": []}
-                    
-                    if not os.path.exists(self._curr_user_recording_name):
-                        os.makedirs(self._curr_user_recording_name)
-                    print(f"Started recording to folder {self._curr_user_recording_name}")
-                    
-                else:
-                    # Finalize recording and create video
-                    from moviepy.editor import ImageSequenceClip
-                    
-                    image_dir = self._curr_user_recording_name
-                    images = sorted([
-                        os.path.join(image_dir, f)
-                        for f in os.listdir(image_dir)
-                        if f.endswith('.png')
-                    ])
+        # Handle recording state transitions
+        if self._user_recording_state_change:
+            if self._user_is_recording:
+                # Initialize new recording
+                self._user_recording_video_queue = deque(
+                    maxlen=self._user_recording_video_queue_size
+                )
+                curr_date_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+                self._curr_user_recording_name = (
+                    self._user_recording_video_path % curr_date_time
+                )
+                self._user_recording_frame = 0
+                
+                self._recorded_motion = {"global_translation": [], "global_rotation": []}
+                
+                if not os.path.exists(self._curr_user_recording_name):
+                    os.makedirs(self._curr_user_recording_name)
+                print(f"Started recording to folder {self._curr_user_recording_name}")
+                
+            else:
+                # Finalize recording and create video
+                from moviepy.editor import ImageSequenceClip
+                
+                image_dir = self._curr_user_recording_name
+                images = sorted([
+                    os.path.join(image_dir, f)
+                    for f in os.listdir(image_dir)
+                    if f.endswith('.png')
+                ])
 
-                    clip = ImageSequenceClip(images, fps=30)
-                    clip.write_videofile(
-                        f"{self._curr_user_recording_name}.mp4",
-                        codec='libx264',
-                        audio=False,
-                        threads=32,
-                        preset='veryfast',
-                        ffmpeg_params=[
-                            '-profile:v', 'main',
-                            '-level', '4.0',
-                            '-pix_fmt', 'yuv420p', 
-                            '-movflags', '+faststart',
-                            '-crf', '23',
-                            '-x264-params', 'keyint=60:min-keyint=30'
-                        ]
-                    )
-                    self._delete_user_viewer_recordings = True
-                    print(f"Video saved to {self._curr_user_recording_name}.mp4")
-                    
-                    # Save the recorded motion to a file
-                    global_translation = torch.cat(self._recorded_motion["global_translation"], dim=0)
-                    global_rotation = torch.cat(self._recorded_motion["global_rotation"], dim=0)
-                    with open(f"{self._curr_user_recording_name}.pt", "wb") as f:
-                        torch.save({"global_translation": global_translation, "global_rotation": global_rotation}, f)
-                    self._recorded_motion = None
-                    
-                self._user_recording_state_change = False
+                clip = ImageSequenceClip(images, fps=30)
+                clip.write_videofile(
+                    f"{self._curr_user_recording_name}.mp4",
+                    codec='libx264',
+                    audio=False,
+                    threads=32,
+                    preset='veryfast',
+                    ffmpeg_params=[
+                        '-profile:v', 'main',
+                        '-level', '4.0',
+                        '-pix_fmt', 'yuv420p', 
+                        '-movflags', '+faststart',
+                        '-crf', '23',
+                        '-x264-params', 'keyint=60:min-keyint=30'
+                    ]
+                )
+                self._delete_user_viewer_recordings = True
+                print(f"Video saved to {self._curr_user_recording_name}.mp4")
+                
+                # Save the recorded motion to a file
+                global_translation = torch.cat(self._recorded_motion["global_translation"], dim=0)
+                global_rotation = torch.cat(self._recorded_motion["global_rotation"], dim=0)
+                with open(f"{self._curr_user_recording_name}.pt", "wb") as f:
+                    torch.save({"global_translation": global_translation, "global_rotation": global_rotation}, f)
+                self._recorded_motion = None
+                
+            self._user_recording_state_change = False
 
             # Capture frame if recording
-            if self._user_is_recording:
-                file_name = (
-                    self._curr_user_recording_name
-                    + "/%04d.png" % self._user_recording_frame
-                )
-                self._write_viewport_to_file(file_name)
-                self._user_recording_frame += 1
-                
-                bodies_state = self.get_bodies_state()
-                self._recorded_motion["global_translation"].append(bodies_state.rigid_body_pos)
-                self._recorded_motion["global_rotation"].append(bodies_state.rigid_body_rot)
+        if self._user_is_recording:
+            file_name = (
+                self._curr_user_recording_name
+                + "/%04d.png" % self._user_recording_frame
+            )
+            self._write_viewport_to_file(file_name)
+            self._user_recording_frame += 1
+            
+            bodies_state = self.get_bodies_state()
+            self._recorded_motion["global_translation"].append(bodies_state.rigid_body_pos)
+            self._recorded_motion["global_rotation"].append(bodies_state.rigid_body_rot)
 
             # Clean up temporary files if needed
             if self._delete_user_viewer_recordings:
