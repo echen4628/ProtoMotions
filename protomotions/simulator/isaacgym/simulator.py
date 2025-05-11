@@ -135,8 +135,8 @@ class IsaacGymSimulator(Simulator):
                 cam_target = gymapi.Vec3(10.0, 0.0, 15.0)
 
             self.camera_props = gymapi.CameraProperties()
-            self.camera_props.width = 360
-            self.camera_props.height = 240
+            self.camera_props.width = 300
+            self.camera_props.height = 300
             self.rendering_camera = self._gym.create_camera_sensor(self._envs[0], self.camera_props)
             self._gym.set_camera_location(self.rendering_camera, self._envs[0], cam_pos, cam_target)
             
@@ -272,6 +272,9 @@ class IsaacGymSimulator(Simulator):
 
         if not self.headless or self.headless_record:
             self._init_camera()
+            # from skrl.utils import isaacgym_utils
+            # self.web_viewer = isaacgym_utils.WebViewer()
+            # self.web_viewer.setup(self._gym, self._sim, self._envs, [self.rendering_camera])
 
         if visualization_markers:
             self._build_marker_state_tensors()
@@ -1064,6 +1067,11 @@ class IsaacGymSimulator(Simulator):
             else:
                 self._gym.poll_viewer_events(self._viewer)
         elif self.headless_record:
+            # self.web_viewer.render(fetch_results=True,
+            #           step_graphics=True,
+            #           render_all_camera_sensors=True,
+            #           wait_for_page_load=True)
+            self._gym.fetch_results(self._sim, True)
             self._gym.step_graphics(self._sim)
             self._update_camera()
             self._gym.render_all_camera_sensors(self._sim)

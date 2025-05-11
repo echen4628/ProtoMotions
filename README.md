@@ -1,3 +1,17 @@
+# Changes:
+* Train Example:
+```python protomotions/train_agent.py +exp=deepmimic_mlp +robot=smpl +simulator=isaacgym motion_file=data/motions/smpl_humanoid_walk.npy +experiment_name=deepmimic_mlp_walk2 +opt=wandb```
+
+* Eval Example:
+```python protomotions/eval_agent.py +robot=smpl +simulator=isaacgym +motion_file=data/motions/smpl_humanoid_walk.npy +checkpoint=results/deepmimic_mlp_walk2/last.ckpt +headless=True +headless_record=True```
+
+* Upload Video Example:
+After running eval with `headless_record=True`
+```python -m protomotions.scripts.upload_video --project test_project```
+This will automatically find the latest folder in `output/renderings`. You can also specify `--folder deepmimic_mlp_walk2-2025-05-11-00-38-53`.
+
+Note, a bunch of logs are created locally at `wandb`. If you run into space issues, just delete them.
+
 # ProtoMotions: Physics-based Character Animation
 *“Primitive or fundamental types of movement that serve as a basis for more complex motions.”*
 

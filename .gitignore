@@ -10,3 +10,4 @@ results/*
 **/.DS_Store
 isaacgym/*
 output/*
+wandb/*
