@@ -110,7 +110,7 @@ class PPO:
 
     def setup(self):
         model: PPOModel = instantiate(self.config.model)
-        model.apply(weight_init)
+        model.apply(weight_init) # NOTE: maybe dont need this?
         actor_optimizer = instantiate(
             self.config.model.config.actor_optimizer,
             params=list(model._actor.parameters()),
@@ -124,7 +124,7 @@ class PPO:
             model, actor_optimizer, critic_optimizer
         )
         self.model.mark_forward_method("act")
-        self.model.mark_forward_method("get_action_and_value")
+        self.model.mark_forward_method("get_action_and_value") # NOTE: does this cancel the prev?
 
     def load(self, checkpoint: Path):
         if checkpoint is not None:
@@ -278,10 +278,13 @@ class PPO:
             with torch.no_grad():
                 self.fabric.call("before_play_steps", self)
 
-                for step in track(
-                    range(self.num_steps),
-                    description=f"Epoch {self.current_epoch}, collecting data...",
-                ):
+                # for step in track(
+                #     range(self.num_steps),
+                #     description=f"Epoch {self.current_epoch}, collecting data...",
+                # ):
+                for step in range(self.num_steps):
+                    print(f"Epoch {self.current_epoch}, collecting data...")
+                    import pdb; pdb.set_trace()
                     obs = self.handle_reset(done_indices)
                     self.experience_buffer.update_data("self_obs", step, obs["self_obs"])
                     if self.config.get("extra_inputs", None) is not None:
@@ -596,6 +599,7 @@ class PPO:
             actions = self.model.act(obs)
             # Step the environment
             obs, rewards, dones, terminated, extras = self.env_step(actions)
+            print(rewards)
             all_done_indices = dones.nonzero(as_tuple=False)
             done_indices = all_done_indices.squeeze(-1)
             step += 1

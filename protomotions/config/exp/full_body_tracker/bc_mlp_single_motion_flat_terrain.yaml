@@ -1,0 +1,34 @@
+# @package _global_
+
+defaults:
+  - /agent/mimic/bc_agent # need to change
+  - /env/mimic
+
+  - /agent/ppo/models/mlp_actor
+  - /agent/mimic/models/mlp_actor_target_pose
+  - /agent/mimic/options/global_tracking
+  - /agent/mimic/options/early_termination_tracking_err
+
+  # - /expert/mimic/bc_expert
+  - /expert/ppo/models/mlp_actor
+  - /expert/mimic/models/mlp_actor_target_pose
+
+
+agent:
+  config:
+    model:
+      config:
+        actor_only: True
+    expert:
+      _target_: protomotions.agents.ppo.model.PPOModel
+      _recursive_: False
+      config:
+        actor_only: True
+
+    
+
+env:
+  config:
+    mimic_target_pose:
+      type: max-coords-future-rel
+      num_future_steps: 2

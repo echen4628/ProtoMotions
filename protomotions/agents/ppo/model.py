@@ -54,25 +54,33 @@ class PPOModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
+        self.actor_only = self.config.actor_only
 
         # create networks
         self._actor: PPOActor = instantiate(
             self.config.actor,
         )
-        self._critic: MultiHeadedMLP = instantiate(
-            self.config.critic,
-        )
+        if not self.actor_only:
+            self._critic: MultiHeadedMLP = instantiate(
+                self.config.critic,
+            )
 
     def get_action_and_value(self, input_dict: dict):
         dist = self._actor(input_dict)
         action = dist.sample()
-        value = self._critic(input_dict).flatten()
+        if not self.actor_only:
+            value = self._critic(input_dict).flatten()
 
         logstd = self._actor.logstd
         std = torch.exp(logstd)
 
         neglogp = self.neglogp(action, dist.mean, std, logstd)
-        return action, neglogp, value.flatten()
+
+        if not self.actor_only:
+            return action, neglogp, value.flatten()
+        else:
+            return action, neglogp, None
+
 
     def act(self, input_dict: dict, mean: bool = True) -> torch.Tensor:
         dist = self._actor(input_dict)
