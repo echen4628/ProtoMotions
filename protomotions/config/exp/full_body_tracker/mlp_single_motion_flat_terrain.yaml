@@ -11,6 +11,12 @@ defaults:
   - /agent/mimic/options/global_tracking
   - /agent/mimic/options/early_termination_tracking_err
 
+agent:
+  config:
+    model:
+      config:
+        actor_only: False
+
 env:
   config:
     mimic_target_pose:

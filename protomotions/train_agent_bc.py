@@ -123,10 +123,8 @@ def main(config: OmegaConf):
     else:
         env = instantiate(config.env, device=fabric.device)
 
-    import pdb; pdb.set_trace()
     agent: PPO = instantiate(config.agent, env=env, fabric=fabric)
     # agent.setup()
-    import pdb; pdb.set_trace()
     agent.setup_actor()
     with open(config.expert_mapping_json, 'r') as f:
         expert_mapping = json.load(f)
@@ -160,8 +158,8 @@ def main(config: OmegaConf):
         with open(checkpoint_config_path, "w") as file:
             OmegaConf.save(unresolved_conf, file)
 
-    # agent.fabric.strategy.barrier()
-
+    agent.fabric.strategy.barrier()
+    agent.run_training_loop()
     # agent.fit()
 
 

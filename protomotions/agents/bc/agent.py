@@ -49,7 +49,7 @@ class BC:
 
 
     def setup_actor(self):
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         model: PPOModel = instantiate(self.config.model)
         model.apply(weight_init)
         actor_optimizer = instantiate(
@@ -64,7 +64,7 @@ class BC:
         self.model.mark_forward_method("get_action_and_value") # this might need to be changed
     
     def setup_expert(self, tag):
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         expert: PPOModel = instantiate(self.config.expert)
         expert.apply(weight_init)
         expert.eval()
@@ -110,8 +110,6 @@ class BC:
             self.load_expert_parameters(state_dict, tag)
 
     def load_expert_parameters(self, state_dict, tag):
-        # expert_model_actor_only = self.remove_from_state_dict(state_dict["model"], '_critic.')
-        import pdb; pdb.set_trace()
         expert_state_dict = self.remove_from_state_dict(state_dict["model"], "_critic.")
         self.experts[tag].load_state_dict(expert_state_dict)
     
@@ -120,184 +118,126 @@ class BC:
         for key in keys:
             if key.startswith(key_to_remove):
                 del state_dict[key]
-        # return state_dict
         return state_dict
+    
+    def run_training_loop(self):
+        self.experience_buffer = ExperienceBuffer(self.num_envs, self.num_steps).to(
+                self.device
+            )
+        self.experience_buffer.register_key(
+            "self_obs", shape=(self.env.config.robot.self_obs_size,)
+        )
+        self.experience_buffer.register_key(
+            "actions", shape=(self.env.config.robot.number_of_actions,)
+        )
+        self.experience_buffer.register_key("rewards")
+        self.experience_buffer.register_key("dones", dtype=torch.long)
+        self.experience_buffer.register_key("neglogp")
+        initial_expertdata = None
 
-#     def run_training_loop(self, n_iter, collect_policy, eval_policy,
-#                         initial_expertdata=None, relabel_with_expert=False,
-#                         start_relabel_with_expert=1, expert_policy=None):
-#         """
-#         :param n_iter:  number of (dagger) iterations
-#         :param collect_policy:
-#         :param eval_policy:
-#         :param initial_expertdata:
-#         :param relabel_with_expert:  whether to perform dagger
-#         :param start_relabel_with_expert: iteration at which to start relabel with expert
-#         :param expert_policy:
-#         """
+        while self.current_epoch < self.config.max_epochs:
+            with torch.no_grad():
+                self.fabric.call("before_play_steps", self)
+                self.model.eval()
+                if self.current_epoch >= 1:
+                    relabel_with_expert = True
+                else:
+                    relabel_with_expert = False
 
-#         # Initialize variables at beginning of training
-#         self.total_envsteps = 0
-#         self.start_time = time.time()
+                self.collect_training_trajectories(
+                        self.current_epoch, # this may need to be iterations instead of step
+                        initial_expertdata,
+                        relabel_with_expert
+                    )
 
-#         for itr in range(n_iter):
-#             print("\n\n********** Iteration %i ************"%itr)
+            # training_log_dict["epoch"] = self.current_epoch
+            self.current_epoch += 1
+            dataset = self.experience_buffer.make_dict()
+            self.fabric.call("after_train", self)
+    
+    def collect_training_trajectories(
+            self,
+            itr,
+            load_initial_expertdata,
+            use_expert
+    ):
+        """
+        :param itr:
+        :param load_initial_expertdata: path to expert data pkl file
+        :param collect_policy: the current policy using which we collect data
+        :return:
+            paths: a list trajectories
+            envsteps_this_batch: the sum over the numbers of environment steps in paths
+            train_video_paths: paths which also contain videos for visualization purposes
+        """
 
-#             # # Decide if videos should be rendered/logged at this iteration
-#             # if itr % self.params['video_log_freq'] == 0 and self.params['video_log_freq'] != -1:
-#             #     self.log_video = True
-#             # else:
-#             #     self.log_video = False
-
-#             # # Decide if metrics should be logged
-#             # if itr % self.params['scalar_log_freq'] == 0:
-#             #     self.log_metrics = True
-#             # else:
-#             #     self.log_metrics = False
-
-#             # Collect trajectories, to be used for training
-#             training_returns = self.collect_training_trajectories(
-#                 itr,
-#                 initial_expertdata,
-#                 collect_policy
-#             )  # HW1: implement this function below
-#             paths, envsteps_this_batch, train_video_paths = training_returns
-#             self.total_envsteps += envsteps_this_batch
-
-#             # Relabel the collected observations with actions from a provided expert policy
-#             if relabel_with_expert and itr>=start_relabel_with_expert:
-#                 # HW1: implement this function below
-#                 paths = self.do_relabel_with_expert(expert_policy, paths)
-
-#             # Add collected data to replay buffer
-#             self.agent.add_to_replay_buffer(paths)
-
-#             # Train agent (using sampled data from replay buffer)
-#             # HW1: implement this function below
-#             training_logs = self.train_agent()
-
-#             # Log and save videos and metrics
-#             # if self.log_video or self.log_metrics:
-
-#             #     # Perform logging
-#             #     print('\nBeginning logging procedure...')
-#             #     self.perform_logging(
-#             #         itr, paths, eval_policy, train_video_paths, training_logs)
-
-#             #     if self.params['save_params']:
-#             #         print('\nSaving agent params')
-#             #         self.agent.save('{}/policy_itr_{}.pt'.format(self.params['logdir'], itr))
-
-
-#     def collect_training_trajectories(
-#             self,
-#             itr,
-#             load_initial_expertdata,
-#             collect_policy
-#     ):
-#         """
-#         :param itr:
-#         :param load_initial_expertdata: path to expert data pkl file
-#         :param collect_policy: the current policy using which we collect data
-#         :return:
-#             paths: a list trajectories
-#             envsteps_this_batch: the sum over the numbers of environment steps in paths
-#             train_video_paths: paths which also contain videos for visualization purposes
-#         """
-
-#         # TODO decide whether to load training data or use the current policy to collect more data
-#         # HINT1: On the first iteration, do you need to collect training trajectories? You might
-#         # want to handle loading from expert data, and if the data doesn't exist, collect an appropriate
-#         # number of transitions.
-#         # HINT2: Loading from expert transitions can be done using pickle.load()
-#         # HINT3: To collect data, you might want to use pre-existing sample_trajectories code from utils
-#         # HINT4: You want each of these collected rollouts to be of length self.params['ep_len']
-#         if itr == 0 and load_initial_expertdata:
-#             with open(load_initial_expertdata, 'rb') as file:
-#                 paths = pickle.load(file)
-#                 envsteps_this_batch = sum([utils.get_pathlength(path) for path in paths])
-#         else:
-#             print("\nCollecting data to be used for training...")
-#             paths, envsteps_this_batch =  utils.sample_trajectories(self.params['eval_batch_size'])
+        # TODO decide whether to load training data or use the current policy to collect more data
+        # HINT1: On the first iteration, do you need to collect training trajectories? You might
+        # want to handle loading from expert data, and if the data doesn't exist, collect an appropriate
+        # number of transitions.
+        # HINT2: Loading from expert transitions can be done using pickle.load()
+        # HINT3: To collect data, you might want to use pre-existing sample_trajectories code from utils
+        # HINT4: You want each of these collected rollouts to be of length self.params['ep_len']
+        # if itr == 0 and load_initial_expertdata:
+        #     with open(load_initial_expertdata, 'rb') as file:
+        #         paths = pickle.load(file)
+        #         envsteps_this_batch = sum([utils.get_pathlength(path) for path in paths])
+        # else:
+        print("\nCollecting data to be used for training...")
+        eval_batch_size = 2
+        motion_tag = list(self.experts.keys())[0]
+        print(f"\nUsing {motion_tag} expert")
+        self.sample_trajectories(self.num_steps, motion_tag, use_expert)
 
     
-# # def sample_trajectories(self, min_timesteps_per_batch):
-# #     """
-# #         Collect rollouts until we have collected `min_timesteps_per_batch` steps.
-# #     """
+    def sample_trajectories(self, min_timesteps_per_batch, motion_tag, use_expert):
+        """
+            Collect rollouts until we have collected `min_timesteps_per_batch` steps.
+        """
+        done_indices = None
+        for step in range(min_timesteps_per_batch):
+            obs = self.handle_reset(done_indices)
+            self.experience_buffer.update_data("self_obs", step, obs["self_obs"])
 
-# #     for step in range(min_timesteps_per_batch):
-# #         import pdb; pdb.set_trace()
-# #         obs = self.handle_reset(done_indices)
-# #         self.experience_buffer.update_data("self_obs", step, obs["self_obs"])
+            # TODO: ignore the value cause we dont have critic
+            action, neglogp, _ = self.model.get_action_and_value(obs)
+            if use_expert:
+                expert_action, _, _ = self.experts[motion_tag].get_action_and_value(obs)
+                self.experience_buffer.update_data("actions", step, expert_action)
+            else:
+                self.experience_buffer.update_data("actions", step, action)
+            self.experience_buffer.update_data("neglogp", step, neglogp)
 
-# #         # TODO: ignore the value cause we dont have critic
-# #         action, neglogp, _ = self.model.get_action_and_value(obs)
-# #         self.experience_buffer.update_data("actions", step, action)
-# #         self.experience_buffer.update_data("neglogp", step, neglogp)
+            # Check for NaNs in observations and actions
+            for key in obs.keys():
+                if torch.isnan(obs[key]).any():
+                    print(f"NaN in {key}: {obs[key]}")
+                    raise ValueError("NaN in obs")
+            if torch.isnan(action).any():
+                raise ValueError(f"NaN in action: {action}")
 
-# #         # Check for NaNs in observations and actions
-# #         for key in obs.keys():
-# #             if torch.isnan(obs[key]).any():
-# #                 print(f"NaN in {key}: {obs[key]}")
-# #                 raise ValueError("NaN in obs")
-# #         if torch.isnan(action).any():
-# #             raise ValueError(f"NaN in action: {action}")
+            # Step the environment
+            next_obs, rewards, dones, terminated, extras = self.env_step(action)
 
-# #         # Step the environment
-# #         next_obs, rewards, dones, terminated, extras = self.env_step(action)
+            all_done_indices = dones.nonzero(as_tuple=False)
+            done_indices = all_done_indices.squeeze(-1)
 
-# #         all_done_indices = dones.nonzero(as_tuple=False)
-# #         done_indices = all_done_indices.squeeze(-1)
+            # # Update logging metrics with the environment feedback
+            # self.post_train_env_step(rewards, dones, done_indices, extras, step)
 
-# #         # # Update logging metrics with the environment feedback
-# #         # self.post_train_env_step(rewards, dones, done_indices, extras, step)
+            self.experience_buffer.update_data("rewards", step, rewards)
+            self.experience_buffer.update_data("dones", step, dones)
 
-# #         self.experience_buffer.update_data("rewards", step, rewards)
-# #         self.experience_buffer.update_data("dones", step, dones)
-
-# #         self.step_count += self.get_step_count_increment()
-#     def sample_trajectories(self, policy, batch_size, ep_len):
-#         paths = []
-#         timesteps_collected = 0
-#         done_indices = None
-
-#         while timesteps_collected < batch_size:
-#             path = {"obs": [], "acts": [], "dones": []}
-#             obs = self.env.reset(done_indices)
-#             for t in range(ep_len):
-#                 action, _, _ = policy.get_action_and_value(obs)
-#                 next_obs, rewards, dones, terminated, extras = self.env_step(action)
-#                 path["obs"].append(obs["self_obs"])
-#                 path["acts"].append(action)
-#                 path["dones"].append(dones)
-#                 obs = next_obs
-
-#                 timesteps_collected += self.env.num_envs
-#                 if timesteps_collected >= batch_size:
-#                     break
-
-#             paths.append({k: torch.stack(v) for k, v in path.items()})
-
-#         return paths, timesteps_collected
-
-#     # def handle_reset(self, done_indices):
-#     #     pass
+            self.step_count += self.get_step_count_increment()
+    def handle_reset(self, done_indices=None):
+        obs = self.env.reset(done_indices)
+        return obs
     
-#     # def env_step(self, action):
-#     #     pass
-    
-#     # def get_step_count_increment(self):
-#     #     pass
 
-#     def handle_reset(self, done_indices=None):
-#         obs = self.env.reset(done_indices)
-#         return obs
+    def env_step(self, actions):
+        obs, rewards, dones, extras = self.env.step(actions)
+        terminated = extras["terminate"]
+        return obs, rewards, dones, terminated, extras
 
-#     def env_step(self, actions):
-#         obs, rewards, dones, extras = self.env.step(actions)
-#         terminated = extras["terminate"]
-#         return obs, rewards, dones, terminated, extras
-
-#     def get_step_count_increment(self):
-#         return self.env.num_envs * self.fabric.world_size
+    def get_step_count_increment(self):
+        return self.env.num_envs * self.fabric.world_size
