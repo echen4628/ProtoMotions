@@ -1,0 +1,14 @@
+motions:
+- file: AMASS/Female1General_c3d-smpl/A3___Swing_poses.npy
+  fps: 120
+  idx: 0
+  labels:
+  - swing
+  weight: 1.0
+- file: AMASS/Female1General_c3d-smpl/A11___crawl_forward_poses.npy
+  fps: 120
+  idx: 1
+  labels:
+  - crawl
+  weight: 1.0
+

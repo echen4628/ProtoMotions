@@ -28,9 +28,10 @@
 
 import os
 import json
-os.environ["WANDB_DISABLE_SENTRY"] = "true"  # Must be first environment variable
-os.environ["WANDB_SILENT"] = "true"
-os.environ["WANDB_DISABLE_CODE"] = "true"
+# commenting this out since we want the wandb plots
+# os.environ["WANDB_DISABLE_SENTRY"] = "true"  # Must be first environment variable
+# os.environ["WANDB_SILENT"] = "true"
+# os.environ["WANDB_DISABLE_CODE"] = "true"
 
 import sys
 from pathlib import Path
@@ -71,6 +72,7 @@ log = logging.getLogger(__name__)
 
 @hydra.main(config_path="config", config_name="base")
 def main(config: OmegaConf):
+    import pdb; pdb.set_trace()
     # resolve=False is important otherwise overrides
     # at inference time won't work properly
     # also, I believe this must be done before instantiation
@@ -128,13 +130,16 @@ def main(config: OmegaConf):
     agent.setup_actor()
     with open(config.expert_mapping_json, 'r') as f:
         expert_mapping = json.load(f)
-    for key in expert_mapping:
-        agent.setup_expert(key)
+
+    # could merge this with the load expert below?
+    # for key in expert_mapping:
+    #     agent.setup_expert(key)
     # agent.setup_expert('walk')
     # agent.setup_expert('skip_to_stand')
     agent.fabric.strategy.barrier()
     agent.load_actor(config.checkpoint)
     for key, expert_checkpoint in expert_mapping.items():
+        agent.setup_expert(key)
         agent.load_expert(expert_checkpoint, key)
     # agent.load_expert(config.checkpoint, 'walk')
     # agent.load_expert(config.checkpoint, 'skip_to_stand')

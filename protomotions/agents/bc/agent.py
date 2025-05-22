@@ -151,10 +151,32 @@ class BC:
                     )
 
             # training_log_dict["epoch"] = self.current_epoch
-            self.current_epoch += 1
             dataset = self.experience_buffer.make_dict()
+
+            # # training/optimization loop
+            # for batch_idx in track(
+            #     range(self.max_num_batches()),
+            #     description=f"Epoch {self.current_epoch}, training...",
+            # ):
+            #     dataset_idx = batch_idx % len(dataset)
+            #     if dataset_idx == 0 and batch_idx != 0 and dataset.do_shuffle:
+            #         dataset.shuffle()            
+            #     batch_dict = dataset[dataset_idx]
+
+            #     # Go over all keys in obs and check if any has nans
+            #     for key in batch_dict.keys():
+            #         has_nan = False
+            #         if torch.isnan(batch_dict[key]).any():
+            #             has_nan = True
+            #             print(f"NaN in {key}: {batch_dict[key]}")
+            #         if has_nan:
+            #             raise ValueError("NaN in training")
+                    
+            #     self.model_step(batch_dict)
+
+            self.current_epoch += 1
             self.fabric.call("after_train", self)
-    
+
     def collect_training_trajectories(
             self,
             itr,
@@ -229,6 +251,8 @@ class BC:
             self.experience_buffer.update_data("dones", step, dones)
 
             self.step_count += self.get_step_count_increment()
+
+
     def handle_reset(self, done_indices=None):
         obs = self.env.reset(done_indices)
         return obs
@@ -239,5 +263,26 @@ class BC:
         terminated = extras["terminate"]
         return obs, rewards, dones, terminated, extras
 
+
     def get_step_count_increment(self):
         return self.env.num_envs * self.fabric.world_size
+    
+    def model_step(self, batch_dict):
+        """
+        Update the policy using expert demonstrations
+        """
+        # Get policy's action distribution
+        dist = self.model._actor(batch_dict)
+        expert_actions = batch_dict["expert_actions"]
+        bc_loss = torch.square(dist.mean - expert_actions).mean()
+
+        # logstd = self.model._actor.logstd
+        # std = torch.exp(logstd)
+        # neglogp = self.model.neglogp(batch_dict["actions"], dist.mean, std, logstd)
+        # loss = neglogp.mean()    
+        
+        self.optimizer.zero_grad()
+        self.fabric.backward(bc_loss)
+        self.optimizer.step()
+        
+        return {"model/bc_loss": bc_loss.detach().item()}

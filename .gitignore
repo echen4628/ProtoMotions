@@ -26,3 +26,5 @@ multi_motion.yaml
 multi_motion_0.yaml
 temp.py
 train.sh
+protomotions/config/expert/old.json
+expert_mapping.json
