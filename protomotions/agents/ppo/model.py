@@ -54,7 +54,8 @@ class PPOModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.actor_only = self.config.actor_only
+        self.actor_only = getattr(self.config, 'actor_only', False)
+        # self.actor_only = self.config.actor_only
 
         # create networks
         self._actor: PPOActor = instantiate(
