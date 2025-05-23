@@ -6,5 +6,21 @@
     "1": {
         "label": "swing",
         "ckpt_path": "results/amass_female_general_a3_swing_poses/score_based.ckpt"
+    },
+    "2": {
+        "label": "walk",
+        "ckpt_path": "results/mlp_full_body_walk/score_based.ckpt"
+    },
+    "3": {
+        "label": "stand_to_skip",
+        "ckpt_path": "results/mlp_stand_to_skip/score_based.ckpt"
+    },
+    "4": {
+        "label": "crouch",
+        "ckpt_path": "results/mlp_full_body_A7_crouch_poses/score_based.ckpt"
+    },
+    "5": {
+        "label": "crouch_to_lie",
+        "ckpt_path": "results/mlp_full_body_A8_crouch_to_lie_poses/score_based.ckpt"
     }
 }

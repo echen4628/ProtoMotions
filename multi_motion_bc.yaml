@@ -11,4 +11,27 @@ motions:
   labels:
   - swing
   weight: 1.0
-
+- file: data/motions/smpl_humanoid_walk.npy
+  fps: 120
+  idx: 2
+  labels:
+  - walk
+  weight: 1.0
+- file: data/motions/stand_to_skip.npy
+  fps: 120
+  idx: 3
+  labels:
+  - stand_to_skip
+  weight: 1.0
+- file: data/motions/A7___crouch_poses.npy
+  fps: 120
+  idx: 4
+  labels:
+  - crouch
+  weight: 1.0
+- file: data/motions/A8___crouch_to_lie_poses.npy
+  fps: 120
+  idx: 5
+  labels:
+  - crouch_to_lie
+  weight: 1.0
