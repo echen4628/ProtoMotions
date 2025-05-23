@@ -1,21 +1,31 @@
 # @package _global_
 
 defaults:
-  - /agent/mimic/agent
+  - /agent/mimic/bc_agent # need to change
   - /env/mimic
 
   - /agent/ppo/models/mlp_actor
-  - /agent/ppo/models/mlp_critic
   - /agent/mimic/models/mlp_actor_target_pose
-  - /agent/mimic/models/mlp_critic_target_pose
   - /agent/mimic/options/global_tracking
   - /agent/mimic/options/early_termination_tracking_err
+
+  # - /expert/mimic/bc_expert
+  - /expert/ppo/models/mlp_actor
+  - /expert/mimic/models/mlp_actor_target_pose
+
 
 agent:
   config:
     model:
       config:
-        actor_only: False
+        actor_only: True
+    expert:
+      _target_: protomotions.agents.ppo.model.PPOModel
+      _recursive_: False
+      config:
+        actor_only: True
+
+    
 
 env:
   config:

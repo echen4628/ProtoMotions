@@ -72,12 +72,20 @@ class ExperienceBuffer(DeviceDtypeModuleMixin):
         assert not data.requires_grad
         getattr(self, key)[:] = data
         self.store_dict[key] += self.total_sum()
+    
+    def overwrite_data(self, key: str, index: int, data: Tensor):
+        assert not data.requires_grad
+        getattr(self, key)[index] = data
 
     def make_dict(self):
         data = {k: swap_and_flatten01(v) for k, v in self.named_buffers()}
         for k, v in self.store_dict.items():
             assert v == self.total_sum(), f"Problem with '{k}', {v}, {self.total_sum()}"
             self.store_dict[k] = 0
+        return data
+    
+    def peek_dict(self):
+        data = {k: swap_and_flatten01(v) for k, v in self.named_buffers() if not k.endswith("_written")}
         return data
 
 

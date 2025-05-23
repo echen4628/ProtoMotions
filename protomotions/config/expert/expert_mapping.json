@@ -1,0 +1,4 @@
+{
+    "crawl": "results/amass_female_general_a11_crawl_poses/score_based.ckpt",
+    "swing": "results/amass_female_general_a3_swing_poses/score_based.ckpt"
+}
