@@ -72,7 +72,6 @@ log = logging.getLogger(__name__)
 
 @hydra.main(config_path="config", config_name="base")
 def main(config: OmegaConf):
-    import pdb; pdb.set_trace()
     # resolve=False is important otherwise overrides
     # at inference time won't work properly
     # also, I believe this must be done before instantiation

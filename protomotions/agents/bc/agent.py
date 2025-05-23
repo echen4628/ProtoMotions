@@ -227,13 +227,12 @@ class BC:
                         relabel_with_expert
                     )
             # TODO: add other necessary values into training_log_dict
-            training_log_dict = {}
+            training_log_dict = self.optimize_model()
             training_log_dict["epoch"] = self.current_epoch
 
             # training_log_dict["epoch"] = self.current_epoch
             # dataset = self.experience_buffer.make_dict()
 
-            self.optimize_model()
             print("yay")
 
             self.current_epoch += 1
@@ -489,7 +488,7 @@ class BC:
         self.fabric.backward(loss)
         self.actor_optimizer.step()
         
-        return {"model/loss": loss.detach().item()}
+        return {"actor/bc_neglogp_loss": loss.detach().item()}
     
 
     # @torch.no_grad()
