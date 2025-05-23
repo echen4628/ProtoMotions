@@ -1,4 +1,10 @@
 {
-    "crawl": "results/amass_female_general_a11_crawl_poses/score_based.ckpt",
-    "swing": "results/amass_female_general_a3_swing_poses/score_based.ckpt"
+    "0": {
+        "label": "crawl",
+        "ckpt_path": "results/amass_female_general_a11_crawl_poses/score_based.ckpt",
+    },
+    "1": {
+        "label": "swing",
+        "ckpt_path": "results/amass_female_general_a3_swing_poses/score_based.ckpt"
+    }
 }

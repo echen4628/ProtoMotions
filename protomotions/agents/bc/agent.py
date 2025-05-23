@@ -8,6 +8,7 @@ import time
 import math
 from pathlib import Path
 from typing import Optional, Tuple, Dict
+import pickle
 
 from lightning.fabric import Fabric
 
@@ -46,6 +47,8 @@ class BC:
         self.episode_reward_meter = AverageMeter(1, 100).to(self.device)
         self.episode_length_meter = AverageMeter(1, 100).to(self.device)
 
+        self.action_dim = self.env.config.robot.number_of_actions
+        self.num_envs = self.env.config.num_envs
 
 
     def setup_actor(self):
@@ -133,25 +136,24 @@ class BC:
         self.experience_buffer.register_key("rewards")
         self.experience_buffer.register_key("dones", dtype=torch.long)
         self.experience_buffer.register_key("neglogp")
-        initial_expertdata = None
+        initial_expertdata = None  # this is always None; remove it!
 
         while self.current_epoch < self.config.max_epochs:
             with torch.no_grad():
                 self.fabric.call("before_play_steps", self)
                 self.model.eval()
-                if self.current_epoch >= 1:
-                    relabel_with_expert = True
-                else:
-                    relabel_with_expert = False
 
-                self.collect_training_trajectories(
-                        self.current_epoch, # this may need to be iterations instead of step
-                        initial_expertdata,
-                        relabel_with_expert
-                    )
+                self.sample_trajectories(self.num_steps, use_expert=True)
+
+                # recommended to clear the experience buffer after each epoch?
+                # self.collect_training_trajectories(
+                #         self.current_epoch, # this may need to be iterations instead of step
+                #         initial_expertdata,
+                #         use_expert=True
+                #     )
 
             # training_log_dict["epoch"] = self.current_epoch
-            dataset = self.experience_buffer.make_dict()
+            # dataset = self.experience_buffer.make_dict()
 
             # # training/optimization loop
             # for batch_idx in track(
@@ -177,12 +179,12 @@ class BC:
             self.current_epoch += 1
             self.fabric.call("after_train", self)
 
-    def collect_training_trajectories(
-            self,
-            itr,
-            load_initial_expertdata,
-            use_expert
-    ):
+    # def collect_training_trajectories(
+    #         self,
+    #         itr,
+    #         load_initial_expertdata,
+    #         use_expert
+    # ):
         """
         :param itr:
         :param load_initial_expertdata: path to expert data pkl file
@@ -193,26 +195,49 @@ class BC:
             train_video_paths: paths which also contain videos for visualization purposes
         """
 
-        # TODO decide whether to load training data or use the current policy to collect more data
-        # HINT1: On the first iteration, do you need to collect training trajectories? You might
-        # want to handle loading from expert data, and if the data doesn't exist, collect an appropriate
-        # number of transitions.
-        # HINT2: Loading from expert transitions can be done using pickle.load()
-        # HINT3: To collect data, you might want to use pre-existing sample_trajectories code from utils
-        # HINT4: You want each of these collected rollouts to be of length self.params['ep_len']
-        # if itr == 0 and load_initial_expertdata:
-        #     with open(load_initial_expertdata, 'rb') as file:
-        #         paths = pickle.load(file)
-        #         envsteps_this_batch = sum([utils.get_pathlength(path) for path in paths])
-        # else:
-        print("\nCollecting data to be used for training...")
-        eval_batch_size = 2
-        motion_tag = list(self.experts.keys())[0]
-        print(f"\nUsing {motion_tag} expert")
-        self.sample_trajectories(self.num_steps, motion_tag, use_expert)
+        """
+        assuming self.experts -> {
+                        "0": {
+                            "label": "",
+                            "ckpt_path": ""
+                        }, 
+                        ....}
+        """
+
+        # for _, metadata in self.experts.items():
+        #     motion_tag = metadata["label"]
+        #     self.sample_trajectories(self.num_steps, motion_tag, use_expert)
+
+
+        
+
+
+        
+
+
+        # self.env.motion_lib.motion_ids, self.env.motion_lib.motion_files
+
+        # for motion_tag in self.experts.keys():
+        #     print(f"\nUsing {motion_tag} expert")
+        #     # Collect data for this expert; you may want to split self.num_steps among experts
+        #     # For example, use self.num_steps // len(self.experts) to distribute steps evenly
+        #     expert_steps = self.num_steps // len(self.experts)
+        #     # Collect trajectories for this expert
+        #     self.sample_trajectories(expert_steps, motion_tag, use_expert)
+            # paths.extend(expert_paths)
+            
+
+
+
+
+        # print("\nCollecting data to be used for training...")
+        # eval_batch_size = 2
+        # motion_tag = list(self.experts.keys())[0]
+        # print(f"\nUsing {motion_tag} expert")
+        # self.sample_trajectories(self.num_steps, motion_tag, use_expert)
 
     
-    def sample_trajectories(self, min_timesteps_per_batch, motion_tag, use_expert):
+    def sample_trajectories(self, min_timesteps_per_batch, use_expert):
         """
             Collect rollouts until we have collected `min_timesteps_per_batch` steps.
         """
@@ -221,25 +246,44 @@ class BC:
             obs = self.handle_reset(done_indices)
             self.experience_buffer.update_data("self_obs", step, obs["self_obs"])
 
-            # TODO: ignore the value cause we dont have critic
-            action, neglogp, _ = self.model.get_action_and_value(obs)
+            action_experts = torch.zeros((self.num_envs, self.action_dim))  # Adjust output_dim accordingly
+            # action_model = torch.zeros((self.num_envs, self.action_dim)) # TODO move to GPU?
+            motion_ids = obs["motion_ids"]  # [4096] -> 0, 1, 2,.. N-1 (N = #motions)
+            for motion_id, model in enumerate(self.experts.items()):  # models = [model0, model1, model2]
+                mask = (motion_ids == motion_id)
+                if mask.any():
+                    partial_obs = obs[mask]
+                    expert_action, _, _ = model.get_action_and_value(partial_obs)
+                    action_experts[mask] = expert_action
+
+            action_model, neglogp, _ = self.model.get_action_and_value(partial_obs)
             if use_expert:
-                expert_action, _, _ = self.experts[motion_tag].get_action_and_value(obs)
-                self.experience_buffer.update_data("actions", step, expert_action)
+                self.experience_buffer.update_data("actions", step, action_experts)
             else:
-                self.experience_buffer.update_data("actions", step, action)
+                self.experience_buffer.update_data("actions", step, action_model)
             self.experience_buffer.update_data("neglogp", step, neglogp)
+
+
+            # import pdb; pdb.set_trace()
+            # # TODO: ignore the value cause we dont have critic
+            # action, neglogp, _ = self.model.get_action_and_value(obs)
+            # if use_expert:
+            #     expert_action, _, _ = self.experts[motion_tag].get_action_and_value(obs)
+            #     self.experience_buffer.update_data("actions", step, expert_action)
+            # else:
+            #     self.experience_buffer.update_data("actions", step, action)
+            # self.experience_buffer.update_data("neglogp", step, neglogp)
 
             # Check for NaNs in observations and actions
             for key in obs.keys():
                 if torch.isnan(obs[key]).any():
                     print(f"NaN in {key}: {obs[key]}")
                     raise ValueError("NaN in obs")
-            if torch.isnan(action).any():
-                raise ValueError(f"NaN in action: {action}")
+            if torch.isnan(action_model).any():
+                raise ValueError(f"NaN in action: {action_model}")
 
             # Step the environment
-            next_obs, rewards, dones, terminated, extras = self.env_step(action)
+            next_obs, rewards, dones, terminated, extras = self.env_step(action_model)
 
             all_done_indices = dones.nonzero(as_tuple=False)
             done_indices = all_done_indices.squeeze(-1)
@@ -254,6 +298,7 @@ class BC:
 
 
     def handle_reset(self, done_indices=None):
+        import pdb; pdb.set_trace()
         obs = self.env.reset(done_indices)
         return obs
     

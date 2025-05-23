@@ -398,6 +398,7 @@ class BaseEnv:
         return new_states
 
     def reset(self, env_ids=None):
+        # import pdb; pdb.set_trace()
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
         if len(env_ids) > 0:
@@ -449,7 +450,10 @@ class BaseEnv:
             self.reset_buf[env_ids] = 0
             self.terminate_buf[env_ids] = 0
 
-        return self.get_obs()
+        observation = self.get_obs()
+        observation["motion_ids"] = reset_ref_motion_ids
+
+        return observation
 
     def reset_ref_state_init(
         self,
