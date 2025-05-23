@@ -72,7 +72,6 @@ log = logging.getLogger(__name__)
 
 @hydra.main(config_path="config", config_name="base")
 def main(config: OmegaConf):
-    # import pdb; pdb.set_trace()
     # resolve=False is important otherwise overrides
     # at inference time won't work properly
     # also, I believe this must be done before instantiation
@@ -130,17 +129,14 @@ def main(config: OmegaConf):
     agent.setup_actor()
     with open(config.expert_mapping_json, 'r') as f:
         expert_mapping = json.load(f)
+    # import pdb; pdb.set_trace()
 
-    # could merge this with the load expert below?
-    # for key in expert_mapping:
-    #     agent.setup_expert(key)
-    # agent.setup_expert('walk')
-    # agent.setup_expert('skip_to_stand')
     agent.fabric.strategy.barrier()
     agent.load_actor(config.checkpoint)
-    for key, expert_checkpoint in expert_mapping.items():
-        agent.setup_expert(key)
-        agent.load_expert(expert_checkpoint, key)
+    for motion_id, metadata in expert_mapping.items():
+        # import pdb; pdb.set_trace()
+        agent.setup_expert(motion_id)
+        agent.load_expert(metadata["ckpt_path"], motion_id)
     # agent.load_expert(config.checkpoint, 'walk')
     # agent.load_expert(config.checkpoint, 'skip_to_stand')
 
@@ -164,6 +160,7 @@ def main(config: OmegaConf):
             OmegaConf.save(unresolved_conf, file)
 
     agent.fabric.strategy.barrier()
+    # import pdb; pdb.set_trace()
     agent.run_training_loop()
     # agent.fit()
 

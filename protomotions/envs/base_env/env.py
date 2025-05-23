@@ -153,6 +153,8 @@ class BaseEnv:
             self.num_envs, 3, dtype=torch.float, device=self.device
         )
 
+        self.motion_ids = None  # define it once at the beginning; this doesn't change throughout the training anyway
+
     ###############################################################
     # Getters
     ###############################################################
@@ -398,7 +400,6 @@ class BaseEnv:
         return new_states
 
     def reset(self, env_ids=None):
-        # import pdb; pdb.set_trace()
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
         if len(env_ids) > 0:
@@ -450,8 +451,11 @@ class BaseEnv:
             self.reset_buf[env_ids] = 0
             self.terminate_buf[env_ids] = 0
 
+            if self.motion_ids is None:
+                self.motion_ids = reset_ref_motion_ids
+
         observation = self.get_obs()
-        observation["motion_ids"] = reset_ref_motion_ids
+        observation["motion_ids"] = self.motion_ids
 
         return observation
 
