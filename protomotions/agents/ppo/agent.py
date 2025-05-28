@@ -131,7 +131,7 @@ class PPO:
             checkpoint = Path(checkpoint).resolve()
             print(f"Loading model from checkpoint: {checkpoint}")
             state_dict = torch.load(checkpoint, map_location=self.device)
-            self.load_parameters(state_dict)
+            self.load_parameters(state_dict, self.config.only_load_actor_weights)
             
             env_checkpoint = checkpoint.resolve().parent / f"env_{self.fabric.global_rank}.ckpt"
             if env_checkpoint.exists():
@@ -139,25 +139,28 @@ class PPO:
                 env_state_dict = torch.load(env_checkpoint, map_location=self.device)
                 self.env.load_state_dict(env_state_dict)
 
-    def load_parameters(self, state_dict):
-        self.current_epoch = state_dict["epoch"]
+    def load_parameters(self, state_dict, only_load_actor_weights):
+        if only_load_actor_weights:
+            self.model.load_in_actor_weights(state_dict["model"])
+        else:
+            self.current_epoch = state_dict["epoch"]
 
-        if "step_count" in state_dict:
-            self.step_count = state_dict["step_count"]
-        if "run_start_time" in state_dict:
-            self.fit_start_time = state_dict["run_start_time"]
+            if "step_count" in state_dict:
+                self.step_count = state_dict["step_count"]
+            if "run_start_time" in state_dict:
+                self.fit_start_time = state_dict["run_start_time"]
 
-        self.best_evaluated_score = state_dict.get("best_evaluated_score", None)
+            self.best_evaluated_score = state_dict.get("best_evaluated_score", None)
 
-        self.model.load_state_dict(state_dict["model"])
-        self.actor_optimizer.load_state_dict(state_dict["actor_optimizer"])
-        self.critic_optimizer.load_state_dict(state_dict["critic_optimizer"])
+            self.model.load_state_dict(state_dict["model"])
+            self.actor_optimizer.load_state_dict(state_dict["actor_optimizer"])
+            self.critic_optimizer.load_state_dict(state_dict["critic_optimizer"])
 
-        if self.config.normalize_values:
-            self.running_val_norm.load_state_dict(state_dict["running_val_norm"])
+            if self.config.normalize_values:
+                self.running_val_norm.load_state_dict(state_dict["running_val_norm"])
 
-        self.episode_reward_meter.load_state_dict(state_dict["episode_reward_meter"])
-        self.episode_length_meter.load_state_dict(state_dict["episode_length_meter"])
+            self.episode_reward_meter.load_state_dict(state_dict["episode_reward_meter"])
+            self.episode_length_meter.load_state_dict(state_dict["episode_length_meter"])
 
     # -----------------------------
     # Model Saving and State Dict
@@ -278,13 +281,12 @@ class PPO:
             with torch.no_grad():
                 self.fabric.call("before_play_steps", self)
 
-                # for step in track(
-                #     range(self.num_steps),
-                #     description=f"Epoch {self.current_epoch}, collecting data...",
-                # ):
-                for step in range(self.num_steps):
-                    print(f"Epoch {self.current_epoch}, collecting data...")
-                    import pdb; pdb.set_trace()
+                for step in track(
+                    range(self.num_steps),
+                    description=f"Epoch {self.current_epoch}, collecting data...",
+                ):
+                # for step in range(self.num_steps):
+                    # print(f"Epoch {self.current_epoch}, collecting data...")
                     obs = self.handle_reset(done_indices)
                     self.experience_buffer.update_data("self_obs", step, obs["self_obs"])
                     if self.config.get("extra_inputs", None) is not None:

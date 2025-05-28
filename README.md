@@ -1,13 +1,46 @@
 # Changes:
-* Train Example:
+* OG Train Example:
 ```python protomotions/train_agent.py +exp=deepmimic_mlp +robot=smpl +simulator=isaacgym motion_file=data/motions/smpl_humanoid_walk.npy +experiment_name=deepmimic_mlp_walk2 +opt=wandb```
 
+* BC Train Example:
+To try using BC and DAgger, use `protomotions/train_agent_bc.py`and `bc_mlp_single_motion_flat_terrain.yaml`.
+Inside `bc_mlp_single_motion_flat_terrain.yaml` there are several new configs. One key hyperparamter is which epoch to begin DAgger.
+That is controlled by the `agent.config.start_relabel_with_expert` field in `ppo/agent.yaml`.
+```
+agent:
+  _target_: protomotions.agents.bc.agent.BC
+  config:
+    # Mimic parameters
+    gradient_clip_val: 50.0
+   ...
+    start_relabel_with_expert: 500 # 0 indexed
+```
+Setting it to 500 means, from epochs 0-499, the agent trains against the expert rollouts. Afterwards, the agent's actions control the trajectory, but the expert actions at each observation is still the training target (this is the DAgger algorithm).
+
+Here is an example command
+```
+python protomotions/train_agent_bc.py +exp=full_body_tracker/bc_mlp_single_motion_flat_terrain.yaml +robot=smpl +simulator=isaacgym motion_file=multi_motion_bc_eric.yaml +experiment_name=mlp_walk_and_skip +opt=wandb +expert_mapping_json=protomotions/config/expert/expert_mapping_eric.json
+```
+
+* PPO after BC Train Example:
+We reuse the `protomotions/train_agent.py` file but with a new config file: `full_body_tracker/ppo_post_bc_mlp_single_motion_flat_terrain.yaml`. This new config file tells PPO to only reuse actor weights. Other models like the critic model should train from scratch.
+
+Most importantly, provide an actor model checkpoint like so `+checkpoint=results/mlp_walk_and_skip/score_based.ckpt`.
+
+Here is an example command:
+```
+python protomotions/train_agent.py +exp=full_body_tracker/ppo_post_bc_mlp_single_motion_flat_terrain.yaml +robot=smpl +simulator=isaacgym motion_file=multi_motion_bc_eric.yaml +experiment_name=mlp_walk_and_skip_ppo +opt=wandb +checkpoint=results/mlp_walk_and_skip/score_based.ckpt
+```
+
 * Eval Example:
+
 ```python protomotions/eval_agent.py +robot=smpl +simulator=isaacgym +motion_file=data/motions/smpl_humanoid_walk.npy +checkpoint=results/deepmimic_mlp_walk2/last.ckpt +headless=True +headless_record=True```
 
 * Upload Video Example:
 After running eval with `headless_record=True`
+
 ```python -m protomotions.scripts.upload_video --project test_project```
+
 This will automatically find the latest folder in `output/renderings`. You can also specify `--folder deepmimic_mlp_walk2-2025-05-11-00-38-53`.
 
 Note, a bunch of logs are created locally at `wandb`. If you run into space issues, just delete them.

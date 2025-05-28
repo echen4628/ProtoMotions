@@ -64,6 +64,16 @@ class PPOModel(nn.Module):
             self._critic: MultiHeadedMLP = instantiate(
                 self.config.critic,
             )
+    
+    def load_in_actor_weights(self, state_dict):
+        old_keys = list(state_dict.keys())
+        for key in old_keys:
+            if "_actor" in key:
+                new_key = "".join(key.split(".")[1:])
+                state_dict[new_key] = state_dict[key]
+                del state_dict[key]
+            else:
+                del state_dict[key]
 
     def get_action_and_value(self, input_dict: dict):
         dist = self._actor(input_dict)
