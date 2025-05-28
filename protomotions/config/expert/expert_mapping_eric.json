@@ -1,5 +1,10 @@
 {
-    "walk": "results/mlp_full_body_walk/score_based.ckpt",
-    "skip_to_stand": "results/mlp_skip_to_stand/score_based.ckpt",
-    "stand_to_skip": "results/mlp_stand_to_skip/score_based.ckpt"
+    "0" : {
+        "label": "walk",
+        "ckpt_path": "results/mlp_full_body_walk/score_based.ckpt"
+    },
+    "1" : {
+        "label": "stand_to_skip",
+        "ckpt_path": "results/mlp_stand_to_skip/score_based.ckpt"
+    }
 }

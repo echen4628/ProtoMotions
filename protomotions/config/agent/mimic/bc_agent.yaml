@@ -12,6 +12,7 @@ agent:
     eval_metric_keys: ["cartesian_err", "gt_err", "dv_rew", "kb_rew", "lr_rew", "rv_rew", "rav_rew", "gr_err", "gr_err_degrees"]
     eval_length: null
     eval_num_episodes: 1
+    start_relabel_with_expert: 500 # 0 indexed
 
     # Early termination
     training_early_termination:

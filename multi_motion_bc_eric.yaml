@@ -1,0 +1,13 @@
+motions:
+- file: data/motions/smpl_humanoid_walk.npy
+  fps: 120
+  idx: 0
+  labels:
+  - walk
+  weight: 1.0
+- file: data/motions/stand_to_skip.npy
+  fps: 120
+  idx: 1
+  labels:
+  - stand_to_skip
+  weight: 1.0

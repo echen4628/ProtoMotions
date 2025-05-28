@@ -27,6 +27,7 @@ from rich.progress import track
 from protomotions.agents.ppo.utils import discount_values, bounds_loss
 
 from collections import defaultdict
+from protomotions.agents.bc.constants import SamplingMode
 
 log = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class BC:
 
         self.action_dim = self.env.config.robot.number_of_actions
         self.num_envs = self.env.config.num_envs
+        self.start_relabel_with_expert = config.start_relabel_with_expert
 
 
     def setup_actor(self):
@@ -210,8 +212,6 @@ class BC:
                 dtype = env_tensor.dtype
                 self.experience_buffer.register_key(key, shape=shape[1:], dtype=dtype)
 
-        # initial_expertdata = None
-
         if self.fit_start_time is None:
             self.fit_start_time = time.time()
         while self.current_epoch < self.config.max_epochs:
@@ -219,8 +219,12 @@ class BC:
             with torch.no_grad():
                 self.fabric.call("before_play_steps", self)
                 self.model.eval()
-
-                self.sample_trajectories(self.num_steps, use_expert=True)
+                if self.current_epoch < self.start_relabel_with_expert:
+                    sampling_mode = SamplingMode.EXPERT_ROLLOUT
+                else:
+                    sampling_mode = SamplingMode.RELABEL_USING_EXPERT
+                print(f"[epoch {self.current_epoch}]: using {sampling_mode}")
+                self.sample_trajectories(self.num_steps, sampling_mode=sampling_mode)
 
                 
             # TODO: add other necessary values into training_log_dict
@@ -257,7 +261,7 @@ class BC:
 
 
     
-    def sample_trajectories(self, min_timesteps_per_batch, use_expert):
+    def sample_trajectories(self, min_timesteps_per_batch, sampling_mode: SamplingMode):
         """
             Collect rollouts until we have collected `min_timesteps_per_batch` steps.
         """
@@ -278,9 +282,9 @@ class BC:
                     action_experts += expert_action * mask.unsqueeze(-1)
 
             action_model, neglogp, _ = self.model.get_action_and_value(obs)
-            if use_expert:
+            if sampling_mode == SamplingMode.EXPERT_ROLLOUT or sampling_mode == SamplingMode.RELABEL_USING_EXPERT:
                 self.experience_buffer.update_data("actions", step, action_experts)
-            else:
+            elif sampling_mode == SamplingMode.ACTOR_ROLLOUT:
                 self.experience_buffer.update_data("actions", step, action_model)
 
             # Check for NaNs in observations and actions
@@ -292,7 +296,10 @@ class BC:
                 raise ValueError(f"NaN in action: {action_model}")
 
             # Step the environment
-            next_obs, rewards, dones, terminated, extras = self.env_step(action_model)
+            if sampling_mode == SamplingMode.ACTOR_ROLLOUT or sampling_mode == SamplingMode.RELABEL_USING_EXPERT:
+                next_obs, rewards, dones, terminated, extras = self.env_step(action_model)
+            elif sampling_mode == SamplingMode.EXPERT_ROLLOUT:
+                next_obs, rewards, dones, terminated, extras = self.env_step(action_experts)
             all_done_indices = dones.nonzero(as_tuple=False)
             done_indices = all_done_indices.squeeze(-1)
 
