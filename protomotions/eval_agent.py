@@ -60,6 +60,7 @@ from lightning.fabric import Fabric  # noqa: E402
 from utils.config_utils import *  # noqa: E402, F403
 
 from protomotions.agents.ppo.agent import PPO  # noqa: E402
+from protomotions.agents.bc.agent import BC
 
 
 @hydra.main(config_path="config")
@@ -117,8 +118,12 @@ def main(override_config: OmegaConf):
         env = instantiate(config.env, device=fabric.device)
 
     agent: PPO = instantiate(config.agent, env=env, fabric=fabric)
-    agent.setup()
-    agent.load(config.checkpoint)
+    if isinstance(agent, BC):
+        agent.setup_actor()
+        agent.load_actor(config.checkpoint)
+    else:
+        agent.setup()
+        agent.load(config.checkpoint)
 
     agent.evaluate_policy()
 
