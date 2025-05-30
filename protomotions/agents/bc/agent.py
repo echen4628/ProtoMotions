@@ -410,7 +410,7 @@ class BC:
             actions = self.model.act(obs)
             # Step the environment
             obs, rewards, dones, terminated, extras = self.env_step(actions)
-            print(rewards)
+            # print(rewards)
             all_done_indices = dones.nonzero(as_tuple=False)
             done_indices = all_done_indices.squeeze(-1)
             step += 1

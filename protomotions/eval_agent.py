@@ -117,8 +117,8 @@ def main(override_config: OmegaConf):
         env = instantiate(config.env, device=fabric.device)
 
     agent: PPO = instantiate(config.agent, env=env, fabric=fabric)
-    agent.setup()
-    agent.load(config.checkpoint)
+    agent.setup_actor()  # changed from .setup()
+    agent.load_actor(config.checkpoint)  # changed from load(config.checkpoint)
 
     agent.evaluate_policy()
 
