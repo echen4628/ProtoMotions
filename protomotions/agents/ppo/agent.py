@@ -599,10 +599,16 @@ class PPO:
             actions = self.model.act(obs)
             # Step the environment
             obs, rewards, dones, terminated, extras = self.env_step(actions)
-            print(rewards)
+            print(rewards,dones)
             all_done_indices = dones.nonzero(as_tuple=False)
             done_indices = all_done_indices.squeeze(-1)
             step += 1
+
+            
+            eval_log_dict, evaluated_score = self.calc_eval_metrics()
+            self.fabric.log_dict(eval_log_dict)
+            # self.post_epoch_logging(eval_log_dict)
+            # self.env.on_epoch_end(self.current_epoch)
 
     def post_epoch_logging(self, training_log_dict: Dict):
         end_time = time.time()
@@ -611,7 +617,7 @@ class PPO:
             "info/episode_reward": self.episode_reward_meter.get_mean().item(),
             "info/frames": torch.tensor(self.step_count),
             "info/gframes": torch.tensor(self.step_count / (10**9)),
-            "times/fps_last_epoch": (self.num_steps * self.get_step_count_increment())
+           "times/fps_last_epoch": (self.num_steps * self.get_step_count_increment())
             / (end_time - self.epoch_start_time),
             "times/fps_total": self.step_count / (end_time - self.fit_start_time),
             "times/training_hours": (end_time - self.fit_start_time) / 3600,
