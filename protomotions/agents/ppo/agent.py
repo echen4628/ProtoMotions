@@ -131,7 +131,7 @@ class PPO:
             checkpoint = Path(checkpoint).resolve()
             print(f"Loading model from checkpoint: {checkpoint}")
             state_dict = torch.load(checkpoint, map_location=self.device)
-            self.load_parameters(state_dict, self.config.only_load_actor_weights)
+            self.load_parameters(state_dict, self.config.get("only_load_actor_weights", False))
             
             env_checkpoint = checkpoint.resolve().parent / f"env_{self.fabric.global_rank}.ckpt"
             if env_checkpoint.exists():
