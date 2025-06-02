@@ -450,6 +450,71 @@ class BC:
             done_indices = all_done_indices.squeeze(-1)
             step += 1
     
+    @torch.no_grad()
+    def evaluate_policy_with_swap(self, swap_count):
+        self.eval()
+        done_indices = None  # Force reset on first entry
+        step = 0
+        use_expert = False
+        while self.config.max_eval_steps is None or step < self.config.max_eval_steps:
+            obs = self.handle_reset(done_indices)
+            if step % swap_count == 0:
+                use_expert = not use_expert
+            if not use_expert:
+                # Obtain actor predictions
+                actions = self.model.act(obs)
+                # Step the environment
+                obs, rewards, dones, terminated, extras = self.env_step(actions)
+            else:
+                print("using expert")
+                action_experts = torch.zeros((self.num_envs, self.action_dim)).to(obs['self_obs'].device)
+                motion_ids = obs["motion_ids"]  # [4096]
+                for motion_id, metadata in self.experts.items():
+                    mask = motion_ids == int(motion_id)
+                    if mask.any():
+                        expert_action, _, _ = metadata["model"].get_action_and_value(obs)
+                        action_experts += expert_action * mask.unsqueeze(-1)
+                # Step the environment
+                obs, rewards, dones, terminated, extras = self.env_step(action_experts)
+            print(rewards)
+            all_done_indices = dones.nonzero(as_tuple=False)
+            done_indices = all_done_indices.squeeze(-1)
+            step += 1
+
+
+    @torch.no_grad()
+    def evaluate_policy_with_rate(self, every_x):
+        self.eval()
+        done_indices = None  # Force reset on first entry
+        step = 1
+        while self.config.max_eval_steps is None or step < self.config.max_eval_steps:
+            obs = self.handle_reset(done_indices)
+            use_expert = True
+            import pdb; pdb.set_trace()
+            if step % every_x == 0:
+                use_expert = False
+            if not use_expert:
+                print("using actor")
+                # Obtain actor predictions
+                actions = self.model.act(obs)
+                # Step the environment
+                obs, rewards, dones, terminated, extras = self.env_step(actions)
+            else:
+                print("using expert")
+                action_experts = torch.zeros((self.num_envs, self.action_dim)).to(obs['self_obs'].device)
+                motion_ids = obs["motion_ids"]  # [4096]
+                for motion_id, metadata in self.experts.items():
+                    mask = motion_ids == int(motion_id)
+                    if mask.any():
+                        expert_action, _, _ = metadata["model"].get_action_and_value(obs)
+                        action_experts += expert_action * mask.unsqueeze(-1)
+                # Step the environment
+                obs, rewards, dones, terminated, extras = self.env_step(action_experts)
+            print(rewards)
+            all_done_indices = dones.nonzero(as_tuple=False)
+            done_indices = all_done_indices.squeeze(-1)
+            step += 1
+    
     def post_epoch_logging(self, training_log_dict: Dict):
         end_time = time.time()
         log_dict = {

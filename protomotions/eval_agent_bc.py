@@ -132,7 +132,7 @@ def main(override_config: OmegaConf):
                 agent.setup_expert(motion_id)
                 agent.load_expert(metadata["ckpt_path"], motion_id)
         
-        agent.evaluate_policy_with_expert(1)
+        agent.evaluate_policy_with_rate(100)
 
     else:
         agent.setup()
