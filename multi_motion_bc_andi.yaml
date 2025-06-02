@@ -1,0 +1,13 @@
+motions:
+- file: data/motions/A7___crouch_poses.npy
+  fps: 120
+  idx: 4
+  labels:
+  - crouch
+  weight: 1.0
+- file: data/motions/A8___crouch_to_lie_poses.npy
+  fps: 120
+  idx: 5
+  labels:
+  - crouch_to_lie
+  weight: 1.0
