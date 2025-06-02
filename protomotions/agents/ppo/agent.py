@@ -283,8 +283,7 @@ class PPO:
                 #     description=f"Epoch {self.current_epoch}, collecting data...",
                 # ):
                 for step in range(self.num_steps):
-                    print(f"Epoch {self.current_epoch}, collecting data...")
-                    import pdb; pdb.set_trace()
+                    # print(f"Epoch {self.current_epoch}, collecting data...")
                     obs = self.handle_reset(done_indices)
                     self.experience_buffer.update_data("self_obs", step, obs["self_obs"])
                     if self.config.get("extra_inputs", None) is not None:
@@ -599,7 +598,7 @@ class PPO:
             actions = self.model.act(obs)
             # Step the environment
             obs, rewards, dones, terminated, extras = self.env_step(actions)
-            print(rewards)
+            # print(rewards)
             all_done_indices = dones.nonzero(as_tuple=False)
             done_indices = all_done_indices.squeeze(-1)
             step += 1

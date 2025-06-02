@@ -271,6 +271,7 @@ class BC:
 
             action_experts = torch.zeros((self.num_envs, self.action_dim)).to(obs['self_obs'].device)
             motion_ids = obs["motion_ids"]  # [4096]
+            import pdb; pdb.set_trace()
             for motion_id, metadata in self.experts.items():
                 mask = motion_ids == int(motion_id)
                 if mask.any():

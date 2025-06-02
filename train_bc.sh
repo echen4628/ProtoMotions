@@ -9,6 +9,6 @@
 python protomotions/train_agent_bc.py \
 +exp=full_body_tracker/bc_mlp_single_motion_flat_terrain.yaml \
 +robot=smpl +simulator=isaacgym motion_file=multi_motion_bc.yaml \
-+experiment_name=bc_6_motions +opt=wandb \
++experiment_name=test_stratified +opt=wandb \
 +expert_mapping_json=protomotions/config/expert/expert_mapping.json
 
