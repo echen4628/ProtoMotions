@@ -13,7 +13,7 @@ agent:
     eval_length: null
     eval_num_episodes: 1
     start_relabel_with_expert: 500 # 0 indexed
-    bc_wo_dagger: True
+    bc_wo_dagger: False
 
 
     # Early termination
