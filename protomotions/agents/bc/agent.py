@@ -423,6 +423,9 @@ class BC:
             all_done_indices = dones.nonzero(as_tuple=False)
             done_indices = all_done_indices.squeeze(-1)
             step += 1
+
+            eval_log_dict, evaluated_score = self.calc_eval_metrics()
+            self.fabric.log_dict(eval_log_dict)
     
     def post_epoch_logging(self, training_log_dict: Dict):
         end_time = time.time()
