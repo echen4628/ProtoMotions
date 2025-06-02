@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
     "0": {
         "label": "crawl",
         "ckpt_path": "results/amass_female_general_a11_crawl_poses/score_based.ckpt"
@@ -25,8 +24,3 @@
         "ckpt_path": "results/mlp_full_body_A8_crouch_to_lie_poses/score_based.ckpt"
     }
 }
-=======
-    "crawl": "results/mlp_full_body_A7_crouch_poses/score_based.ckpt",
-    "swing": "results/mlp_full_body_A8_crouch_to_lie_poses/score_based.ckpt"
-}
->>>>>>> sandbox/andi/update
