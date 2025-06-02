@@ -17,7 +17,7 @@ from isaac_utils import torch_utils
 
 from protomotions.utils.time_report import TimeReport
 from protomotions.utils.average_meter import AverageMeter, TensorAverageMeterDict
-from protomotions.agents.utils.data_utils import DictDataset, ExperienceBuffer
+from protomotions.agents.utils.data_utils import DictDataset, ExperienceBuffer, combine_datasets, select_x_items
 from protomotions.agents.ppo.model import PPOModel
 from protomotions.agents.common.common import weight_init, get_params
 from protomotions.envs.base_env.env import BaseEnv
@@ -28,6 +28,7 @@ from protomotions.agents.ppo.utils import discount_values, bounds_loss
 
 from collections import defaultdict
 from protomotions.agents.bc.constants import SamplingMode
+from copy import deepcopy
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +43,9 @@ class BC:
 
         self.num_envs: int = self.env.config.num_envs
         self.num_steps: int = config.num_steps
-
+        self.percent_steps_from_bc: int = config.percent_steps_from_bc
+        self.percent_steps_from_dagger: int = config.percent_steps_from_dagger
+        assert self.percent_steps_from_bc + self.percent_steps_from_dagger == 100, "ensure the sum of percent_steps_from_bc and percent_steps_from_dagger is 100."
         self.current_epoch = 0
         self.step_count = 0
         self.num_mini_epochs: int = config.num_mini_epochs
@@ -201,6 +204,7 @@ class BC:
         self.experience_buffer.register_key("dones", dtype=torch.long)
         # self.experience_buffer.register_key("neglogp") -> doesn't have the same shape as others (4096, ?) in the buffer (this is a constant value)
 
+
         if self.config.get("extra_inputs", None) is not None:
             obs = self.env.get_obs()
             for key in self.config.extra_inputs.keys():
@@ -211,6 +215,8 @@ class BC:
                 shape = env_tensor.shape
                 dtype = env_tensor.dtype
                 self.experience_buffer.register_key(key, shape=shape[1:], dtype=dtype)
+        
+        self.expert_experience_buffer = deepcopy(self.experience_buffer)
 
         if self.fit_start_time is None:
             self.fit_start_time = time.time()
@@ -220,15 +226,39 @@ class BC:
                 self.fabric.call("before_play_steps", self)
                 self.model.eval()
                 if self.current_epoch < self.start_relabel_with_expert:
-                    sampling_mode = SamplingMode.EXPERT_ROLLOUT
+                    bc_sampling_mode = SamplingMode.EXPERT_ROLLOUT
+                    expert_sampling_mode = None
                 else:
-                    sampling_mode = SamplingMode.RELABEL_USING_EXPERT
-                print(f"[epoch {self.current_epoch}]: using {sampling_mode}")
-                self.sample_trajectories(self.num_steps, sampling_mode=sampling_mode)
-
+                    bc_sampling_mode = SamplingMode.EXPERT_ROLLOUT
+                    expert_sampling_mode = SamplingMode.RELABEL_USING_EXPERT
+                print(f"[epoch {self.current_epoch}]: bc_sampling_mode is {bc_sampling_mode}")
+                print(f"[epoch {self.current_epoch}]: expert_sampling_mode is {expert_sampling_mode}")
+                if bc_sampling_mode:
+                    self.sample_trajectories(self.experience_buffer, self.num_steps, sampling_mode=bc_sampling_mode)
+                if expert_sampling_mode:
+                    self.sample_trajectories(self.expert_experience_buffer, self.num_steps, sampling_mode=expert_sampling_mode)
                 
+                if bc_sampling_mode and expert_sampling_mode:
+                    bc_steps = int(self.num_steps*self.num_envs* self.percent_steps_from_bc/100)
+                    expert_steps = int(self.num_steps*self.num_envs - bc_steps)
+                    print(f"[epoch {self.current_epoch}]: using {bc_steps} from bc experience and {expert_steps} from expert experience in dataset")
+                    
+                    # process dataset already does the shuffling
+                    dataset_bc = self.process_dataset(self.experience_buffer.make_dict())
+                    dataset_expert = self.process_dataset(self.expert_experience_buffer.make_dict())
+                    dataset = combine_datasets(dataset_bc, bc_steps, dataset_expert, expert_steps)
+
+                elif bc_sampling_mode:
+                    print(f"[epoch {self.current_epoch}]: using only bc experience in dataset")
+                    dataset = self.process_dataset(self.experience_buffer.make_dict())
+                elif expert_sampling_mode:
+                    print(f"[epoch {self.current_epoch}]: using only expert experience in dataset")
+                    dataset = self.process_dataset(self.expert_experience_buffer.make_dict())
+                else:
+                    raise Exception("Both bc_sampling_mode and expert_sampling_mode are somehow both None. Did you sample at all?")
+
             # TODO: add other necessary values into training_log_dict
-            training_log_dict = self.optimize_model()
+            training_log_dict = self.optimize_model(dataset)
             training_log_dict["epoch"] = self.current_epoch
 
 
@@ -261,17 +291,17 @@ class BC:
 
 
     
-    def sample_trajectories(self, min_timesteps_per_batch, sampling_mode: SamplingMode):
+    def sample_trajectories(self, experience_buffer, min_timesteps_per_batch, sampling_mode: SamplingMode):
         """
             Collect rollouts until we have collected `min_timesteps_per_batch` steps.
         """
         done_indices = None
         for step in range(min_timesteps_per_batch):
             obs = self.handle_reset(done_indices)
-            self.experience_buffer.update_data("self_obs", step, obs["self_obs"])
+            experience_buffer.update_data("self_obs", step, obs["self_obs"])
             if self.config.get("extra_inputs", None) is not None:
                 for key in self.config.extra_inputs:
-                    self.experience_buffer.update_data(key, step, obs[key])
+                    experience_buffer.update_data(key, step, obs[key])
 
             action_experts = torch.zeros((self.num_envs, self.action_dim)).to(obs['self_obs'].device)
             motion_ids = obs["motion_ids"]  # [4096]
@@ -283,9 +313,9 @@ class BC:
 
             action_model, neglogp, _ = self.model.get_action_and_value(obs)
             if sampling_mode == SamplingMode.EXPERT_ROLLOUT or sampling_mode == SamplingMode.RELABEL_USING_EXPERT:
-                self.experience_buffer.update_data("actions", step, action_experts)
+                experience_buffer.update_data("actions", step, action_experts)
             elif sampling_mode == SamplingMode.ACTOR_ROLLOUT:
-                self.experience_buffer.update_data("actions", step, action_model)
+                experience_buffer.update_data("actions", step, action_model)
 
             # Check for NaNs in observations and actions
             for key in obs.keys():
@@ -306,8 +336,8 @@ class BC:
             # # Update logging metrics with the environment feedback
             # self.post_train_env_step(rewards, dones, done_indices, extras, step)
 
-            self.experience_buffer.update_data("rewards", step, rewards)
-            self.experience_buffer.update_data("dones", step, dones)
+            experience_buffer.update_data("rewards", step, rewards)
+            experience_buffer.update_data("dones", step, dones)
 
             self.step_count += self.get_step_count_increment()
 
@@ -330,10 +360,9 @@ class BC:
     # -----------------------------
     # Optimization
     # -----------------------------
-    def optimize_model(self) -> Dict:
+    def optimize_model(self, dataset) -> Dict:
         # training/optimization loop
 
-        dataset = self.process_dataset(self.experience_buffer.make_dict())
         self.train()
         training_log_dict = {}
 

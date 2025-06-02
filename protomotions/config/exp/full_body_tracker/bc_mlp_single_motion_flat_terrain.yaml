@@ -16,6 +16,8 @@ defaults:
 
 agent:
   config:
+    # percent_steps_from_bc: 75 # setting this to 100 will only use expert rollout data, but the code will still run the expert relabeling during DAgger. Its better to change start_relabel_with_expert 
+    # percent_steps_from_dagger: 25
     model:
       config:
         actor_only: True

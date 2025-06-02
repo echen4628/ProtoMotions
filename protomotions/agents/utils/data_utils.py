@@ -126,3 +126,20 @@ class DictDataset(Dataset):
         start_idx = index * self.batch_size
         end_idx = min((index + 1) * self.batch_size, self.num_tensors)
         return {k: v[start_idx:end_idx] for k, v in self.tensor_dict.items()}
+
+
+def select_x_items(ds: DictDataset, x: int) -> Dict[str, Tensor]:
+    assert x <= ds.num_tensors, f"Requested {x} items, but dataset has only {ds.num_tensors}"
+    selected_tensors = {k: v[:x] for k, v in ds.tensor_dict.items()}
+    return selected_tensors
+
+def combine_datasets(ds1: DictDataset, count1: int, ds2: DictDataset, count2: int, shuffle=False) -> DictDataset:
+    assert set(ds1.tensor_dict.keys()) == set(ds2.tensor_dict.keys()), "Datasets must have matching keys"
+    
+    ds1_tensors = select_x_items(ds1, count1)
+    ds2_tensors = select_x_items(ds2, count2)
+    combined_tensors = {}
+    for key in ds1.tensor_dict:
+        combined_tensors[key] = torch.cat([ds1_tensors[key], ds2_tensors[key]], dim=0)
+    combined_batch_size = ds1.batch_size
+    return DictDataset(batch_size=combined_batch_size, tensor_dict=combined_tensors, shuffle=shuffle)
