@@ -43,9 +43,6 @@ class BC:
 
         self.num_envs: int = self.env.config.num_envs
         self.num_steps: int = config.num_steps
-        self.percent_steps_from_bc: int = config.percent_steps_from_bc
-        self.percent_steps_from_dagger: int = config.percent_steps_from_dagger
-        assert self.percent_steps_from_bc + self.percent_steps_from_dagger == 100, "ensure the sum of percent_steps_from_bc and percent_steps_from_dagger is 100."
         self.current_epoch = 0
         self.step_count = 0
         self.num_mini_epochs: int = config.num_mini_epochs
@@ -239,6 +236,9 @@ class BC:
                     self.sample_trajectories(self.expert_experience_buffer, self.num_steps, sampling_mode=expert_sampling_mode)
                 
                 if bc_sampling_mode and expert_sampling_mode:
+                    self.percent_steps_from_bc: int = self.config.percent_steps_from_bc
+                    self.percent_steps_from_dagger: int = self.config.percent_steps_from_dagger
+                    assert self.percent_steps_from_bc + self.percent_steps_from_dagger == 100, "ensure the sum of percent_steps_from_bc and percent_steps_from_dagger is 100."
                     bc_steps = int(self.num_steps*self.num_envs* self.percent_steps_from_bc/100)
                     expert_steps = int(self.num_steps*self.num_envs - bc_steps)
                     print(f"[epoch {self.current_epoch}]: using {bc_steps} from bc experience and {expert_steps} from expert experience in dataset")
