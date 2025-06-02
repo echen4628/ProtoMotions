@@ -22,6 +22,7 @@ from protomotions.agents.ppo.model import PPOModel
 from protomotions.agents.common.common import weight_init, get_params
 from protomotions.envs.base_env.env import BaseEnv
 from protomotions.envs.mimic.env import Mimic as MimicEnv
+from protomotions.envs.mimic.env import Mimic as MimicEnv
 from protomotions.utils.running_mean_std import RunningMeanStd
 from rich.progress import track
 from protomotions.agents.ppo.utils import discount_values, bounds_loss
@@ -54,6 +55,7 @@ class BC:
         self.action_dim = self.env.config.robot.number_of_actions
         self.num_envs = self.env.config.num_envs
         self.start_relabel_with_expert = config.start_relabel_with_expert
+        self.bc_wo_dagger = config.bc_wo_dagger
 
 
     def setup_actor(self):
@@ -219,7 +221,7 @@ class BC:
             with torch.no_grad():
                 self.fabric.call("before_play_steps", self)
                 self.model.eval()
-                if self.current_epoch < self.start_relabel_with_expert:
+                if self.bc_wo_dagger or self.current_epoch < self.start_relabel_with_expert:
                     sampling_mode = SamplingMode.EXPERT_ROLLOUT
                 else:
                     sampling_mode = SamplingMode.RELABEL_USING_EXPERT

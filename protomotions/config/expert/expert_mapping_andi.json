@@ -1,4 +1,10 @@
 {
-    "crawl": "results/mlp_full_body_A7_crouch_poses/score_based.ckpt",
-    "swing": "results/mlp_full_body_A8_crouch_to_lie_poses/score_based.ckpt"
+    "0": {
+        "label": "crouch",
+        "ckpt_path": "results/mlp_full_body_A7_crouch_poses/score_based.ckpt"
+    },
+    "1": {
+        "label": "crouch_to_lie",
+        "ckpt_path": "results/mlp_full_body_A8_crouch_to_lie_poses/score_based.ckpt"
+    }
 }
