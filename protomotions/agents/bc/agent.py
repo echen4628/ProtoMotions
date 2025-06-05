@@ -275,7 +275,7 @@ class BC:
                 and self.current_epoch > 0
                 and self.current_epoch % self.config.eval_metrics_every == 0
             ):
-                eval_log_dict, evaluated_score = self.calc_eval_metrics()
+                eval_log_dict, evaluated_score = self.calc_eval_metrics(self.model)
                 evaluated_score = self.fabric.broadcast(evaluated_score, src=0)
                 if evaluated_score is not None:
                     if (
@@ -310,7 +310,7 @@ class BC:
             for motion_id, metadata in self.experts.items():
                 mask = motion_ids == int(motion_id)
                 if mask.any():
-                    expert_action, _, _ = metadata["model"].get_action_and_value(obs)
+                    expert_action = metadata["model"].act(obs)
                     action_experts += expert_action * mask.unsqueeze(-1)
 
             action_model, neglogp, _ = self.model.get_action_and_value(obs)
@@ -453,8 +453,27 @@ class BC:
             done_indices = all_done_indices.squeeze(-1)
             step += 1
             
-            eval_log_dict, evaluated_score = self.calc_eval_metrics()
+            eval_log_dict, evaluated_score = self.calc_eval_metrics(self.model)
             self.fabric.log_dict(eval_log_dict)
+    
+    # @torch.no_grad()
+    # def evaluate_expert_policy(self):
+    #     self.eval()
+    #     done_indices = None  # Force reset on first entry
+    #     step = 0
+    #     while self.config.max_eval_steps is None or step < self.config.max_eval_steps:
+    #         obs = self.handle_reset(done_indices)
+    #         # Obtain actor predictions
+    #         actions = self.model.act(obs)
+    #         # Step the environment
+    #         obs, rewards, dones, terminated, extras = self.env_step(actions)
+    #         print(rewards,dones)
+    #         all_done_indices = dones.nonzero(as_tuple=False)
+    #         done_indices = all_done_indices.squeeze(-1)
+    #         step += 1
+            
+    #         eval_log_dict, evaluated_score = self.calc_eval_metrics()
+    #         self.fabric.log_dict(eval_log_dict)
     
     def post_epoch_logging(self, training_log_dict: Dict):
         end_time = time.time()
@@ -531,8 +550,8 @@ class BC:
         return motion_map, motions_per_rank
 
     @torch.no_grad()
-    def calc_eval_metrics(self) -> Tuple[Dict, Optional[float]]:
-        self.eval()
+    def calc_eval_metrics(self, model) -> Tuple[Dict, Optional[float]]:
+        model.eval()
         if self.env.config.motion_manager.fixed_motion_id is not None:
             num_motions = 1
         else:
@@ -600,7 +619,7 @@ class BC:
                 )
 
                 for l in range(max_len):
-                    actions = self.model.act(obs)
+                    actions = model.act(obs)
                     obs, rewards, dones, terminated, extras = self.env_step(actions)
                     elapsed_time += dt
                     clip_done = (motion_lengths - dt) < elapsed_time

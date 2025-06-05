@@ -74,6 +74,7 @@ class PPOModel(nn.Module):
                 del state_dict[key]
             else:
                 del state_dict[key]
+        self._actor.load_state_dict(state_dict)
 
     def get_action_and_value(self, input_dict: dict):
         dist = self._actor(input_dict)

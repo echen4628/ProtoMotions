@@ -1,0 +1,7 @@
+motions:
+- file: data/motions/smpl_humanoid_walk.npy
+  fps: 120
+  idx: 2
+  labels:
+  - walk
+  weight: 1.0
