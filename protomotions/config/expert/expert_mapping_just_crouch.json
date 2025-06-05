@@ -1,0 +1,6 @@
+{
+    "0": {
+        "label": "crouch",
+        "ckpt_path": "results/mlp_full_body_A7_crouch_poses/score_based.ckpt"
+    }
+}

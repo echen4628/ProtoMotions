@@ -1,0 +1,7 @@
+motions:
+- file: data/motions/A11___crawl_forward_poses.npy
+  fps: 120
+  idx: 0
+  labels:
+  - crawl
+  weight: 1.0

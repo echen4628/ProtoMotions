@@ -67,13 +67,15 @@ class PPOModel(nn.Module):
     
     def load_in_actor_weights(self, state_dict):
         old_keys = list(state_dict.keys())
+        import pdb; pdb.set_trace()
         for key in old_keys:
-            if "_actor" in key:
-                new_key = "".join(key.split(".")[1:])
+            if "_actor." in key:
+                new_key = ".".join(key.split(".")[1:])
                 state_dict[new_key] = state_dict[key]
                 del state_dict[key]
             else:
                 del state_dict[key]
+        self._actor.load_state_dict(state_dict)
 
     def get_action_and_value(self, input_dict: dict):
         dist = self._actor(input_dict)
@@ -95,6 +97,7 @@ class PPOModel(nn.Module):
     def act(self, input_dict: dict, mean: bool = True) -> torch.Tensor:
         dist = self._actor(input_dict)
         if mean:
+            print("i got mean")
             return dist.mean
         return dist.sample()
 

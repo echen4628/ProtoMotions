@@ -33,6 +33,7 @@ from pathlib import Path
 import hydra
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
+import json
 
 has_robot_arg = False
 simulator = None
@@ -119,8 +120,20 @@ def main(override_config: OmegaConf):
 
     agent: PPO = instantiate(config.agent, env=env, fabric=fabric)
     if isinstance(agent, BC):
+        import pdb; pdb.set_trace()
         agent.setup_actor()
+        agent.fabric.strategy.barrier()
         agent.load_actor(config.checkpoint)
+        agent.fabric.strategy.barrier()
+
+        with open(config.expert_mapping_json, 'r') as f:
+            expert_mapping = json.load(f)
+        for motion_id, metadata in expert_mapping.items():
+            # import pdb; pdb.set_trace()
+            agent.setup_expert(motion_id)
+            agent.fabric.strategy.barrier()
+            agent.load_expert(metadata["ckpt_path"], motion_id)
+
     else:
         agent.setup()
         agent.load(config.checkpoint)

@@ -1,0 +1,6 @@
+{
+    "0": {
+        "label": "crawl",
+        "ckpt_path": "results/amass_female_general_a11_crawl_poses/score_based.ckpt"
+    }
+}

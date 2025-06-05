@@ -118,8 +118,9 @@ class BC:
             self.load_expert_parameters(state_dict, motion_id)
 
     def load_expert_parameters(self, state_dict, motion_id):
-        expert_state_dict = self.remove_from_state_dict(state_dict["model"], "_critic.")
-        self.experts[motion_id]["model"].load_state_dict(expert_state_dict)
+        self.experts[motion_id]["model"].load_in_actor_weights(state_dict["model"])
+        # expert_state_dict = self.remove_from_state_dict(state_dict["model"], "_critic.")
+        # self.experts[motion_id]["model"].load_state_dict(expert_state_dict)
     
     def remove_from_state_dict(self, state_dict, key_to_remove):
         keys = list(state_dict.keys())
@@ -445,7 +446,15 @@ class BC:
         while self.config.max_eval_steps is None or step < self.config.max_eval_steps:
             obs = self.handle_reset(done_indices)
             # Obtain actor predictions
-            actions = self.model.act(obs)
+            # import pdb; pdb.set_trace()
+            actions = self.experts["0"]["model"].act(obs)
+            # motion_ids = obs["motion_ids"]  # [4096]
+            # action_experts = torch.zeros((self.num_envs, self.action_dim)).to(obs['self_obs'].device)
+            # for motion_id, metadata in self.experts.items():
+            #     mask = motion_ids == int(motion_id)
+            #     if mask.any():
+            #         expert_action = metadata["model"].act(obs)
+            #         action_experts += expert_action * mask.unsqueeze(-1)
             # Step the environment
             obs, rewards, dones, terminated, extras = self.env_step(actions)
             print(rewards,dones)
