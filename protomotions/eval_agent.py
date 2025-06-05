@@ -129,16 +129,34 @@ def main(override_config: OmegaConf):
         with open(config.expert_mapping_json, 'r') as f:
             expert_mapping = json.load(f)
         for motion_id, metadata in expert_mapping.items():
+            agent.load_ppo_expert(metadata["ckpt_path"], motion_id)
+            agent.expert_evaluate_policy()
             # import pdb; pdb.set_trace()
-            agent.setup_expert(motion_id)
-            agent.fabric.strategy.barrier()
-            agent.load_expert(metadata["ckpt_path"], motion_id)
+            # # agent.setup_expert(motion_id)
+            # # agent.fabric.strategy.barrier()
+
+            # expert_checkpoint = Path(metadata["ckpt_path"])
+            # expert_config_path = expert_checkpoint.parent / "config.yaml"
+            # print(f"Loading expert config file from {expert_config_path}")
+            # with open(expert_config_path) as file:
+            #     expert_train_config = OmegaConf.load(file)
+
+            # if expert_train_config.eval_overrides is not None:
+            #     expert_train_config = OmegaConf.merge(
+            #         expert_train_config, expert_train_config.eval_overrides
+            #     )
+            # expert: PPO = instantiate(expert_train_config.agent, env=env, fabric=fabric)
+            # expert.setup()
+            # import pdb; pdb.set_trace()
+            # expert.load(metadata["ckpt_path"])
+            # expert.evaluate_policy()
+            # # agent.load_expert(metadata["ckpt_path"], motion_id)
 
     else:
         agent.setup()
         agent.load(config.checkpoint)
 
-    agent.evaluate_policy()
+    # agent.evaluate_policy()
 
 
 if __name__ == "__main__":

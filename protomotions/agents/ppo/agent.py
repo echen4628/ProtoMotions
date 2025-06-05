@@ -109,6 +109,7 @@ class PPO:
         return self.fabric.broadcast(self._should_stop)
 
     def setup(self):
+        import pdb; pdb.set_trace()
         model: PPOModel = instantiate(self.config.model)
         model.apply(weight_init) # NOTE: maybe dont need this?
         actor_optimizer = instantiate(
@@ -133,15 +134,17 @@ class PPO:
             state_dict = torch.load(checkpoint, map_location=self.device)
             self.load_parameters(state_dict, self.config.only_load_actor_weights)
             
-            env_checkpoint = checkpoint.resolve().parent / f"env_{self.fabric.global_rank}.ckpt"
-            if env_checkpoint.exists():
-                print(f"Loading env checkpoint: {env_checkpoint}")
-                env_state_dict = torch.load(env_checkpoint, map_location=self.device)
-                self.env.load_state_dict(env_state_dict)
+            # env_checkpoint = checkpoint.resolve().parent / f"env_{self.fabric.global_rank}.ckpt"
+            # if env_checkpoint.exists():
+            #     print(f"Loading env checkpoint: {env_checkpoint}")
+            #     env_state_dict = torch.load(env_checkpoint, map_location=self.device)
+            #     self.env.load_state_dict(env_state_dict)
 
     def load_parameters(self, state_dict, only_load_actor_weights):
+        import pdb; pdb.set_trace()
         if only_load_actor_weights:
             self.model.load_in_actor_weights(state_dict["model"])
+            # self.model.load_state_dict(state_dict["model"])
         else:
             self.current_epoch = state_dict["epoch"]
 
@@ -183,32 +186,93 @@ class PPO:
         state_dict.update(extra_state_dict)
         return state_dict
 
+    # def save(self, path=None, name="last.ckpt", new_high_score=False):
+    #     if path is None:
+    #         path = self.fabric.loggers[0].log_dir
+    #     root_dir = Path.cwd() / Path(self.fabric.loggers[0].root_dir)
+    #     save_dir = Path.cwd() / Path(path)
+    #     state_dict = self.get_state_dict({})
+    #     self.fabric.save(save_dir / name, state_dict)
+
+    #     if self.fabric.global_rank == 0:
+    #         if root_dir != save_dir:
+    #             # if (root_dir / "last.ckpt").is_symlink():
+    #             #     (root_dir / "last.ckpt").unlink()
+    #             last_ckpt_path = root_dir / "last.ckpt"
+    #             if last_ckpt_path.exists() or last_ckpt_path.is_symlink():
+    #                 last_ckpt_path.unlink()
+    #             relative_path = Path(os.path.relpath(save_dir / name, root_dir))
+    #             last_ckpt_path.symlink_to(relative_path)
+    #             # Make root_dir / "last.ckpt" point to the new checkpoint.
+    #             # Calculate the relative path and create a symbolic link.
+    #             # relative_path = Path(os.path.relpath(save_dir / name, root_dir))
+    #             (root_dir / "last.ckpt").symlink_to(relative_path)
+    #             log.info(f"saved checkpoint, {root_dir / 'last.ckpt'}")
+    #     self.fabric.barrier()
+        
+    #     # Save env state for all ranks to the same directory.
+    #     rank_0_path = (root_dir / "last.ckpt").resolve().parent
+    #     env_checkpoint = rank_0_path / f"env_{self.fabric.global_rank}.ckpt"
+    #     env_state_dict = self.env.get_state_dict()
+    #     torch.save(env_state_dict, env_checkpoint)
+
+    #     # Check if new high score flag is consistent across devices.
+    #     gathered_high_score = self.fabric.all_gather(new_high_score)
+    #     assert all(
+    #         [x == gathered_high_score[0] for x in gathered_high_score]
+    #     ), "New high score flag should be the same across all ranks."
+
+    #     if new_high_score:
+    #         score_based_name = "score_based.ckpt"
+    #         self.fabric.save(save_dir / score_based_name, state_dict)
+    #         print(
+    #             f"New best performing controller found with score {self.best_evaluated_score}. Model saved to {save_dir / score_based_name}."
+    #         )
+    #         if self.fabric.global_rank == 0:
+    #             if root_dir != save_dir:
+    #                 # if (root_dir / "score_based.ckpt").is_symlink():
+    #                 #     (root_dir / "score_based.ckpt").unlink()
+    #                 score_ckpt_path = root_dir / "score_based.ckpt"
+    #                 if score_ckpt_path.exists() or score_ckpt_path.is_symlink():
+    #                     score_ckpt_path.unlink()
+    #                 relative_path = Path(os.path.relpath(save_dir / name, root_dir))
+    #                 score_ckpt_path.symlink_to(relative_path)
+    #                 # Create symlink for the best score checkpoint.
+    #                 # relative_path = Path(os.path.relpath(save_dir / name, root_dir))
+    #                 (root_dir / "score_based.ckpt").symlink_to(relative_path)
     def save(self, path=None, name="last.ckpt", new_high_score=False):
         if path is None:
             path = self.fabric.loggers[0].log_dir
+
         root_dir = Path.cwd() / Path(self.fabric.loggers[0].root_dir)
         save_dir = Path.cwd() / Path(path)
         state_dict = self.get_state_dict({})
         self.fabric.save(save_dir / name, state_dict)
 
-        if self.fabric.global_rank == 0:
-            if root_dir != save_dir:
-                if (root_dir / "last.ckpt").is_symlink():
-                    (root_dir / "last.ckpt").unlink()
-                # Make root_dir / "last.ckpt" point to the new checkpoint.
-                # Calculate the relative path and create a symbolic link.
-                relative_path = Path(os.path.relpath(save_dir / name, root_dir))
-                (root_dir / "last.ckpt").symlink_to(relative_path)
-                log.info(f"saved checkpoint, {root_dir / 'last.ckpt'}")
+        if self.fabric.global_rank == 0 and root_dir != save_dir:
+            last_ckpt_path = root_dir / "last.ckpt"
+            relative_path = Path(os.path.relpath(save_dir / name, root_dir))
+
+            # Overwrite any existing file or symlink
+            try:
+                last_ckpt_path.unlink()
+            except FileNotFoundError:
+                pass
+            except IsADirectoryError:
+                shutil.rmtree(last_ckpt_path)
+
+            last_ckpt_path.symlink_to(relative_path)
+            log.info(f"Saved checkpoint symlink at {last_ckpt_path} → {relative_path}")
+
         self.fabric.barrier()
-        
-        # Save env state for all ranks to the same directory.
+
+        # Save env state for all ranks
         rank_0_path = (root_dir / "last.ckpt").resolve().parent
         env_checkpoint = rank_0_path / f"env_{self.fabric.global_rank}.ckpt"
         env_state_dict = self.env.get_state_dict()
         torch.save(env_state_dict, env_checkpoint)
 
-        # Check if new high score flag is consistent across devices.
+        # Ensure high score flag is consistent
         gathered_high_score = self.fabric.all_gather(new_high_score)
         assert all(
             [x == gathered_high_score[0] for x in gathered_high_score]
@@ -220,14 +284,20 @@ class PPO:
             print(
                 f"New best performing controller found with score {self.best_evaluated_score}. Model saved to {save_dir / score_based_name}."
             )
-            if self.fabric.global_rank == 0:
-                if root_dir != save_dir:
-                    if (root_dir / "score_based.ckpt").is_symlink():
-                        (root_dir / "score_based.ckpt").unlink()
-                    # Create symlink for the best score checkpoint.
-                    relative_path = Path(os.path.relpath(save_dir / name, root_dir))
-                    (root_dir / "score_based.ckpt").symlink_to(relative_path)
 
+            if self.fabric.global_rank == 0 and root_dir != save_dir:
+                score_ckpt_path = root_dir / "score_based.ckpt"
+                relative_path = Path(os.path.relpath(save_dir / name, root_dir))
+
+                try:
+                    score_ckpt_path.unlink()
+                except FileNotFoundError:
+                    pass
+                except IsADirectoryError:
+                    shutil.rmtree(score_ckpt_path)
+
+                score_ckpt_path.symlink_to(relative_path)
+                log.info(f"Saved best score symlink at {score_ckpt_path} → {relative_path}")
     # -----------------------------
     # Experience Buffer and Training Loop
     # -----------------------------

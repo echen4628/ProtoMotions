@@ -31,6 +31,9 @@ from collections import defaultdict
 from protomotions.agents.bc.constants import SamplingMode
 from copy import deepcopy
 
+from omegaconf import OmegaConf
+
+
 log = logging.getLogger(__name__)
 
 class BC:
@@ -56,6 +59,8 @@ class BC:
         self.num_envs = self.env.config.num_envs
         self.start_relabel_with_expert = config.start_relabel_with_expert
         self.bc_wo_dagger = config.bc_wo_dagger
+        self.force_full_restart = False
+        self.task_reward_w: float = config.task_reward_w
 
 
     def setup_actor(self):
@@ -73,12 +78,30 @@ class BC:
         self.model.mark_forward_method("get_action_and_value") # this might need to be changed
     
     def setup_expert(self, motion_id):
+        import pdb; pdb.set_trace()
         expert: PPOModel = instantiate(self.config.expert)
         expert.apply(weight_init)
         expert.eval()
         self.experts[motion_id]["model"] = self.fabric.setup(expert)
         self.experts[motion_id]["model"].mark_forward_method("act")
         self.experts[motion_id]["model"].mark_forward_method("get_action_and_value") # this might need to be changed
+
+        # expert: PPOModel = instantiate(self.config.model)
+        # model.apply(weight_init) # NOTE: maybe dont need this?
+        # actor_optimizer = instantiate(
+        #     self.config.model.config.actor_optimizer,
+        #     params=list(model._actor.parameters()),
+        # )
+        # critic_optimizer = instantiate(
+        #     self.config.model.config.critic_optimizer,
+        #     params=list(model._critic.parameters()),
+        # )
+
+        # self.model, self.actor_optimizer, self.critic_optimizer = self.fabric.setup(
+        #     model, actor_optimizer, critic_optimizer
+        # )
+        # self.model.mark_forward_method("act")
+        # self.model.mark_forward_method("get_action_and_value") # NOTE: does this cancel the prev?
 
     def load_actor(self, checkpoint: Path):
         if checkpoint is not None:
@@ -116,7 +139,46 @@ class BC:
             print(f"Loading model from checkpoint as expert for {motion_id}: {checkpoint}")
             state_dict = torch.load(checkpoint, map_location=self.device)
             self.load_expert_parameters(state_dict, motion_id)
+    
+    def load_ppo_expert(self, checkpoint: Path, motion_id):
+        expert_checkpoint = Path(checkpoint)
+        expert_config_path = expert_checkpoint.parent / "config.yaml"
+        print(f"Loading expert config file from {expert_config_path}")
+        with open(expert_config_path) as file:
+            expert_train_config = OmegaConf.load(file)
 
+        if expert_train_config.eval_overrides is not None:
+            expert_train_config = OmegaConf.merge(
+                expert_train_config, expert_train_config.eval_overrides
+            )
+        self.ppo_expert: PPO = instantiate(expert_train_config.agent, env=self.env, fabric=self.fabric)
+        self.ppo_expert.setup()
+        import pdb; pdb.set_trace()
+        self.ppo_expert.load(checkpoint)
+        self.ppo_expert_model = self.ppo_expert.model
+        # self.ppo_expert.evaluate_policy()
+
+    def expert_evaluate_policy(self):
+        # self.ppo_expert.evaluate_policy()
+        # self.ppo_expert_model 
+        # self.ppo_expert_model.eval()
+        self.ppo_expert_model.eval()
+        done_indices = None  # Force reset on first entry
+        step = 0
+        while self.config.max_eval_steps is None or step < self.config.max_eval_steps:
+            obs = self.handle_reset(done_indices)
+            # Obtain actor predictions
+            actions = self.ppo_expert_model.act(obs)
+            # Step the environment
+            obs, rewards, dones, terminated, extras = self.env_step(actions)
+            print(rewards,dones)
+            all_done_indices = dones.nonzero(as_tuple=False)
+            done_indices = all_done_indices.squeeze(-1)
+            step += 1
+
+            
+            eval_log_dict, evaluated_score = self.calc_eval_metrics(self.ppo_expert_model)
+            self.fabric.log_dict(eval_log_dict)
     def load_expert_parameters(self, state_dict, motion_id):
         self.experts[motion_id]["model"].load_in_actor_weights(state_dict["model"])
         # expert_state_dict = self.remove_from_state_dict(state_dict["model"], "_critic.")
@@ -345,15 +407,28 @@ class BC:
             self.step_count += self.get_step_count_increment()
 
 
+    # def handle_reset(self, done_indices=None):
+    #     obs = self.env.reset(done_indices)
+    #     return obs
+    
     def handle_reset(self, done_indices=None):
+        if self.force_full_restart:
+            done_indices = None
+            self.force_full_restart = False
         obs = self.env.reset(done_indices)
         return obs
     
 
+    # def env_step(self, actions):
+    #     obs, rewards, dones, extras = self.env.step(actions)
+    #     terminated = extras["terminate"]
+    #     return obs, rewards, dones, terminated, extras
     def env_step(self, actions):
         obs, rewards, dones, extras = self.env.step(actions)
+        rewards = rewards * self.task_reward_w
         terminated = extras["terminate"]
         return obs, rewards, dones, terminated, extras
+
 
 
     def get_step_count_increment(self):
@@ -540,8 +615,8 @@ class BC:
         return motion_map, motions_per_rank
 
     @torch.no_grad()
-    def calc_eval_metrics(self) -> Tuple[Dict, Optional[float]]:
-        self.eval()
+    def calc_eval_metrics(self, model) -> Tuple[Dict, Optional[float]]:
+        model.eval()
         if self.env.config.motion_manager.fixed_motion_id is not None:
             num_motions = 1
         else:
@@ -609,7 +684,7 @@ class BC:
                 )
 
                 for l in range(max_len):
-                    actions = self.model.act(obs)
+                    actions = model.act(obs)
                     obs, rewards, dones, terminated, extras = self.env_step(actions)
                     elapsed_time += dt
                     clip_done = (motion_lengths - dt) < elapsed_time

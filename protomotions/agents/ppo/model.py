@@ -97,7 +97,7 @@ class PPOModel(nn.Module):
     def act(self, input_dict: dict, mean: bool = True) -> torch.Tensor:
         dist = self._actor(input_dict)
         if mean:
-            print("i got mean")
+            # print("i got mean")
             return dist.mean
         return dist.sample()
 

@@ -126,6 +126,7 @@ def main(config: OmegaConf):
     agent: PPO = instantiate(config.agent, env=env, fabric=fabric)
     agent.setup()
     agent.fabric.strategy.barrier()
+    import pdb; pdb.set_trace()
     agent.load(config.checkpoint)
 
     # find out wandb id and save to config.yaml if 1st run:
