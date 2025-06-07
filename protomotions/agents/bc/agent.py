@@ -56,6 +56,8 @@ class BC:
         self.num_envs = self.env.config.num_envs
         self.start_relabel_with_expert = config.start_relabel_with_expert
         self.bc_wo_dagger = config.bc_wo_dagger
+        self.force_full_restart = False
+        self.task_reward_w: float = config.task_reward_w
 
 
     def setup_actor(self):
@@ -234,6 +236,7 @@ class BC:
                 print(f"[epoch {self.current_epoch}]: expert_sampling_mode is {expert_sampling_mode}")
                 if bc_sampling_mode:
                     self.sample_trajectories(self.experience_buffer, self.num_steps, sampling_mode=bc_sampling_mode)
+                    # import pdb; pdb.set_trace()
                 if expert_sampling_mode:
                     self.sample_trajectories(self.expert_experience_buffer, self.num_steps, sampling_mode=expert_sampling_mode)
                 
@@ -299,6 +302,7 @@ class BC:
         """
         done_indices = None
         for step in range(min_timesteps_per_batch):
+            # print(f"step: {step}, Done: {done_indices}")
             obs = self.handle_reset(done_indices)
             experience_buffer.update_data("self_obs", step, obs["self_obs"])
             if self.config.get("extra_inputs", None) is not None:
@@ -307,6 +311,7 @@ class BC:
 
             action_experts = torch.zeros((self.num_envs, self.action_dim)).to(obs['self_obs'].device)
             motion_ids = obs["motion_ids"]  # [4096]
+            # print(f"step: {step}, Motion_ids: {motion_ids}")
             for motion_id, metadata in self.experts.items():
                 mask = motion_ids == int(motion_id)
                 if mask.any():
@@ -345,12 +350,16 @@ class BC:
 
 
     def handle_reset(self, done_indices=None):
+        if self.force_full_restart:
+            done_indices = None
+            self.force_full_restart = False
         obs = self.env.reset(done_indices)
         return obs
     
 
     def env_step(self, actions):
         obs, rewards, dones, extras = self.env.step(actions)
+        rewards = rewards * self.task_reward_w
         terminated = extras["terminate"]
         return obs, rewards, dones, terminated, extras
 
@@ -443,37 +452,46 @@ class BC:
         done_indices = None  # Force reset on first entry
         step = 0
         while self.config.max_eval_steps is None or step < self.config.max_eval_steps:
-            obs = self.handle_reset(done_indices)
-            # Obtain actor predictions
-            actions = self.model.act(obs)
-            # Step the environment
-            obs, rewards, dones, terminated, extras = self.env_step(actions)
-            print(rewards,dones)
-            all_done_indices = dones.nonzero(as_tuple=False)
-            done_indices = all_done_indices.squeeze(-1)
+            # obs = self.handle_reset(done_indices)
+            # # Obtain actor predictions
+            # actions = self.model.act(obs)
+            # # Step the environment
+            # obs, rewards, dones, terminated, extras = self.env_step(actions)
+            # print(rewards,dones)
+            # all_done_indices = dones.nonzero(as_tuple=False)
+            # done_indices = all_done_indices.squeeze(-1)
             step += 1
             
             eval_log_dict, evaluated_score = self.calc_eval_metrics(self.model)
             self.fabric.log_dict(eval_log_dict)
     
-    # @torch.no_grad()
-    # def evaluate_expert_policy(self):
-    #     self.eval()
-    #     done_indices = None  # Force reset on first entry
-    #     step = 0
-    #     while self.config.max_eval_steps is None or step < self.config.max_eval_steps:
-    #         obs = self.handle_reset(done_indices)
-    #         # Obtain actor predictions
-    #         actions = self.model.act(obs)
-    #         # Step the environment
-    #         obs, rewards, dones, terminated, extras = self.env_step(actions)
-    #         print(rewards,dones)
-    #         all_done_indices = dones.nonzero(as_tuple=False)
-    #         done_indices = all_done_indices.squeeze(-1)
-    #         step += 1
-            
-    #         eval_log_dict, evaluated_score = self.calc_eval_metrics()
-    #         self.fabric.log_dict(eval_log_dict)
+    @torch.no_grad()
+    def evaluate_expert_policy(self):
+        self.eval()
+        done_indices = None  # Force reset on first entry
+        step = 0
+        while self.config.max_eval_steps is None or step < self.config.max_eval_steps:
+            # obs = self.handle_reset(done_indices)
+            # # Obtain actor predictions
+            # actions = self.model.act(obs)
+            # # Step the environment
+            # obs, rewards, dones, terminated, extras = self.env_step(actions)
+            # print(rewards,dones)
+            # all_done_indices = dones.nonzero(as_tuple=False)
+            # done_indices = all_done_indices.squeeze(-1)
+            step += 1
+            # action_experts = torch.zeros((self.num_envs, self.action_dim)).to(obs['self_obs'].device)
+            # motion_ids = obs["motion_ids"]  # [4096]
+            # for motion_id, metadata in self.experts.items():
+            #     mask = motion_ids == int(motion_id)
+            #     if mask.any():
+            #         expert_action = metadata["model"].act(obs)
+            #         action_experts += expert_action * mask.unsqueeze(-1)
+            # import pdb; pdb.set_trace()
+            eval_log_dict, evaluated_score = self.calc_eval_metrics(self.experts["0"]["model"])
+            self.fabric.log_dict(eval_log_dict)
+    
+    
     
     def post_epoch_logging(self, training_log_dict: Dict):
         end_time = time.time()

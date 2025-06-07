@@ -29,6 +29,7 @@
 import os
 import sys
 from pathlib import Path
+import json
 
 import hydra
 from hydra.utils import instantiate
@@ -118,14 +119,28 @@ def main(override_config: OmegaConf):
         env = instantiate(config.env, device=fabric.device)
 
     agent: PPO = instantiate(config.agent, env=env, fabric=fabric)
+    with open(config.expert_mapping_json, 'r') as f:
+        expert_mapping = json.load(f)
     if isinstance(agent, BC):
         agent.setup_actor()
+        agent.fabric.strategy.barrier()
+
         agent.load_actor(config.checkpoint)
+        
+        for motion_id, metadata in expert_mapping.items():
+            agent.setup_expert(motion_id)
+    
+        agent.fabric.strategy.barrier()
+        for motion_id, metadata in expert_mapping.items():
+            agent.load_expert(metadata["ckpt_path"], motion_id)
+
+        print("EVALUATION FOR THE EXPERT HERE!")
+        agent.evaluate_expert_policy()
     else:
         agent.setup()
         agent.load(config.checkpoint)
 
-    agent.evaluate_policy()
+        agent.evaluate_policy()
 
 
 if __name__ == "__main__":

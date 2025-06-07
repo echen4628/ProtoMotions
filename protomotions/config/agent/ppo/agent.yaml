@@ -1,6 +1,7 @@
 # @package _global_
 
 num_envs: 4096
+# num_envs: 1
 agent:
   _target_: protomotions.agents.ppo.agent.PPO
   _recursive_: False
@@ -12,6 +13,7 @@ agent:
       config: ???  # Config to be filled by the module-specific configs
     # PPO parameters
     num_steps: 32
+    # num_steps: 1024
     tau: 0.95
     gamma: 0.99
     e_clip: 0.2
@@ -23,6 +25,7 @@ agent:
     normalize_values: True
     normalized_val_clamp_value: 5
     normalize_advantage: True
+    # batch_size: 1
     batch_size: 16384
     task_reward_w: 1.0
     num_mini_epochs: 1

@@ -95,7 +95,7 @@ class MotionManager(BaseComponent):
                     torch.zeros_like(new_times),
                     new_times,
                 )
-
+        # print(f"new motion id: {new_motion_ids}. new motion times: {new_times}")
         self.motion_ids[env_ids] = new_motion_ids
         self.motion_times[env_ids] = new_times
 

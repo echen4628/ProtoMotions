@@ -134,8 +134,10 @@ def main(config: OmegaConf):
     agent.fabric.strategy.barrier()
     agent.load_actor(config.checkpoint)
     for motion_id, metadata in expert_mapping.items():
-        # import pdb; pdb.set_trace()
         agent.setup_expert(motion_id)
+    
+    agent.fabric.strategy.barrier()
+    for motion_id, metadata in expert_mapping.items():
         agent.load_expert(metadata["ckpt_path"], motion_id)
     # agent.load_expert(config.checkpoint, 'walk')
     # agent.load_expert(config.checkpoint, 'skip_to_stand')

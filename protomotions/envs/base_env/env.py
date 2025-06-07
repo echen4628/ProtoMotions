@@ -408,6 +408,7 @@ class BaseEnv:
             env_ids = env_ids.to(self.device)
 
             if self.motion_manager is not None:
+                # import pdb; pdb.set_trace()
                 self.motion_manager.reset_envs(env_ids)
 
             if self.state_init == self.StateInit.Default:
@@ -417,6 +418,7 @@ class BaseEnv:
                 reset_ref_motion_ids = []
                 reset_ref_motion_times = []
             elif self.state_init == self.StateInit.Data:
+                # import pdb; pdb.set_trace()
                 new_states, motion_ids, motion_times = self.reset_ref_state_init(
                     env_ids
                 )
@@ -451,11 +453,12 @@ class BaseEnv:
             self.reset_buf[env_ids] = 0
             self.terminate_buf[env_ids] = 0
 
-            if self.motion_ids is None:
-                self.motion_ids = reset_ref_motion_ids
+            self.motion_ids = reset_ref_motion_ids
 
+        # import pdb; pdb.set_trace()
         observation = self.get_obs()
-        observation["motion_ids"] = self.motion_ids
+        # observation["motion_ids"] = self.motion_ids
+        observation["motion_ids"] = self.motion_manager.motion_ids
 
         return observation
 
