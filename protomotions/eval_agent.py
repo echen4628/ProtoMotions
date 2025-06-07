@@ -134,8 +134,9 @@ def main(override_config: OmegaConf):
         for motion_id, metadata in expert_mapping.items():
             agent.load_expert(metadata["ckpt_path"], motion_id)
 
-        print("EVALUATION FOR THE EXPERT HERE!")
-        agent.evaluate_expert_policy()
+        # print("EVALUATION FOR THE EXPERT HERE!")
+        # agent.evaluate_expert_policy()
+        agent.evaluate_policy()
     else:
         agent.setup()
         agent.load(config.checkpoint)

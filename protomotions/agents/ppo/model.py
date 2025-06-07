@@ -69,12 +69,13 @@ class PPOModel(nn.Module):
         old_keys = list(state_dict.keys())
         for key in old_keys:
             if "_actor" in key:
-                new_key = "".join(key.split(".")[1:])
+                new_key = ".".join(key.split(".")[1:])
                 state_dict[new_key] = state_dict[key]
                 del state_dict[key]
             else:
                 del state_dict[key]
         self._actor.load_state_dict(state_dict)
+        print("loaded and saved actor weights")
 
     def get_action_and_value(self, input_dict: dict):
         dist = self._actor(input_dict)
