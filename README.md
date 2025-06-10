@@ -63,6 +63,9 @@ python protomotions/eval_agent.py +robot=smpl \
 
  
 
+-------------------------------------------------------
+
+
 
 * OG Train Example:
 ```python protomotions/train_agent.py +exp=deepmimic_mlp +robot=smpl +simulator=isaacgym motion_file=data/motions/smpl_humanoid_walk.npy +experiment_name=deepmimic_mlp_walk2 +opt=wandb```
