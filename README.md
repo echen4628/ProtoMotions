@@ -6,16 +6,16 @@ Training
 ```
 python protomotions/train_agent.py \
 +exp=full_body_tracker/mlp_single_motion_flat_terrain.yaml \
-+robot=smpl +simulator=isaacgym motion_file=multi_motion_bc.yaml \
-+experiment_name=combined_6_motions_yaml +opt=wandb
++robot=smpl +simulator=isaacgym motion_file=data/motions/A11___crawl_forward_poses.npy \
++experiment_name=expert_crawl_motion +opt=wandb
 ```
 
 Evaluation
 ```
 python protomotions/eval_agent.py +robot=smpl \
-+simulator=isaacgym +motion_file=multi_motion_bc.yaml \
-# +checkpoint=results/combined_6_motions_yaml/score_based.ckpt +headless=True \
-# +headless_record=True
++simulator=isaacgym +motion_file=data/motions/A11___crawl_forward_poses.npy \
++checkpoint=results/expert_crawl_motion/score_based.ckpt +headless=True \
++headless_record=True
 ```
 
 
