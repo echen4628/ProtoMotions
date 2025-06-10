@@ -1,4 +1,4 @@
-## Learning from Experts: Three Stage Training for Multi-Action Physics-Based Control
+## [CS224R] Learning from Experts: Three Stage Training for Multi-Action Physics-Based Control
 
 ### Stage 1: Training expert on individual reference motion files  
 
