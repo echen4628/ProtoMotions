@@ -1,43 +1,63 @@
-## Learning from Experts: Three Stage Training for Multi-Action Physics-Based Control:
+## Learning from Experts: Three Stage Training for Multi-Action Physics-Based Control
 
 ### Stage 1: Training expert on individual reference motion files  
 
 Training
 ```
-
+python protomotions/train_agent.py \
++exp=full_body_tracker/mlp_single_motion_flat_terrain.yaml \
++robot=smpl +simulator=isaacgym motion_file=multi_motion_bc.yaml \
++experiment_name=combined_6_motions_yaml +opt=wandb
 ```
 
 Evaluation
 ```
-
+python protomotions/eval_agent.py +robot=smpl \
++simulator=isaacgym +motion_file=multi_motion_bc.yaml \
+# +checkpoint=results/combined_6_motions_yaml/score_based.ckpt +headless=True \
+# +headless_record=True
 ```
 
 
 
 ### Stage 2: Behavior Cloning + DAgger  
 
-Training
+Training (25% BC + 75% DAgger)
 ```
-
+python protomotions/train_agent_bc.py \
++exp=full_body_tracker/bc_mlp_single_motion_flat_terrain.yaml motion_file=multi_motion_bc.yaml \
++robot=smpl +simulator=isaacgym +experiment_name=mlp_6_motions_25_bc_75_dagger_bugfix \
++opt=wandb +expert_mapping_json=protomotions/config/expert/expert_mapping.json \
++agent.config.percent_steps_from_bc=25 \
++agent.config.percent_steps_from_dagger=75
 ```
 
 Evaluation
 ```
-
+python protomotions/eval_agent.py +robot=smpl \
++simulator=isaacgym +motion_file=multi_motion_bc.yaml \
++checkpoint=results/mlp_6_motions_25_bc_75_dagger_bugfix/score_based.ckpt \
++headless=True +headless_record=True
 ```
-
 
 
 ### Stage 3: PPO finetuning  
 
 Training
 ```
-
+python protomotions/train_agent.py \
++exp=full_body_tracker/ppo_post_bc_mlp_single_motion_flat_terrain.yaml \
++robot=smpl +simulator=isaacgym motion_file=multi_motion_bc.yaml \
++experiment_name=mlp_all_6_motions_ppo +opt=wandb \
++checkpoint=results/mlp_6_motions_25_bc_75_dagger_bugfix/score_based.ckpt
 ```
 
 Evaluation
 ```
-
+python protomotions/eval_agent.py +robot=smpl \
++simulator=isaacgym +motion_file=multi_motion_bc.yaml \
++checkpoint=results/mlp_all_6_motions_ppo/score_based.ckpt +headless=True \
++headless_record=True +opt=wandb
 ```
 
 
