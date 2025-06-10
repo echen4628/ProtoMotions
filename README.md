@@ -1,4 +1,49 @@
-# Changes:
+## Learning from Experts: Three Stage Training for Multi-Action Physics-Based Control:
+
+### Stage 1: Training expert on individual reference motion files  
+
+Training
+```
+
+```
+
+Evaluation
+```
+
+```
+
+
+
+### Stage 2: Behavior Cloning + DAgger  
+
+Training
+```
+
+```
+
+Evaluation
+```
+
+```
+
+
+
+### Stage 3: PPO finetuning  
+
+Training
+```
+
+```
+
+Evaluation
+```
+
+```
+
+
+ 
+
+
 * OG Train Example:
 ```python protomotions/train_agent.py +exp=deepmimic_mlp +robot=smpl +simulator=isaacgym motion_file=data/motions/smpl_humanoid_walk.npy +experiment_name=deepmimic_mlp_walk2 +opt=wandb```
 
@@ -44,6 +89,12 @@ After running eval with `headless_record=True`
 This will automatically find the latest folder in `output/renderings`. You can also specify `--folder deepmimic_mlp_walk2-2025-05-11-00-38-53`.
 
 Note, a bunch of logs are created locally at `wandb`. If you run into space issues, just delete them.
+
+
+
+
+----------------------------------------------------------------
+
 
 # ProtoMotions: Physics-based Character Animation
 *“Primitive or fundamental types of movement that serve as a basis for more complex motions.”*
